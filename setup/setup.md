@@ -309,8 +309,11 @@ run `/init` again.
 
 ### Check 11: Claude Code permissions
 
-Read `~/.claude/settings.json` using the Read tool (not bash). Check that the `permissions.allow`
-array contains ALL of these required patterns:
+Read `~/.claude/settings.json` using the Read tool (not bash). Verify these two things:
+
+#### 11a — Required permission patterns
+
+Check that `permissions.allow` contains ALL of these patterns:
 
 ```
 Bash(git:*)
@@ -319,28 +322,71 @@ Bash(grep:*)
 Bash(find:*)
 Bash(ls:*)
 Bash(echo:*)
+Bash(cat:*)
+Bash(sed:*)
+Bash(sort:*)
+Bash(head:*)
+Bash(wc:*)
 Bash(test -d:*)
 Bash(test -f:*)
 Bash(command -v:*)
 Bash(mkdir -p:*)
-Bash(cp ~/.claude/skills/alfred-code/:*)
-Bash(source ~/.claude/:*)
+Bash(cp:*)
+Bash(source:*)
+Bash(curl:*)
 Bash(npm:*)
-Bash(node -p:*)
+Bash(node:*)
+Bash(python:*)
+Bash(python3:*)
+Bash(pip3:*)
 Bash(graphify:*)
+Bash(chmod:*)
+Bash(bash:*)
+Read(**)
+Read(~/.claude/**)
 Edit(**)
+Edit(~/.claude/**)
 Write(**)
+Write(~/.claude/**)
 ```
 
-Also check that `Edit(~/.claude/skills/**)` is present (needed for skill maintenance).
+#### 11b — additionalDirectories
 
-**If any are missing:** report the missing patterns and offer to add them to settings.json.
-Adding them requires editing `~/.claude/settings.json` to append the missing entries to the
-`permissions.allow` array.
+Check that `permissions.additionalDirectories` includes `/Users/juanmanuel/.claude` (the full
+`~/.claude` directory, not just the skills subdirectory). This allows alfred-code to read
+`settings.json`, credential files, and other config without permission prompts.
+
+#### 11c — Dynamic command permissions (project-specific)
+
+Read the project's `.claude/alfred-code/config.md` and extract these commands if configured:
+- `linter.command` (e.g., `npm run lint`)
+- `linter.fix_command` (e.g., `npm run lint -- --fix`)
+- `build_test.test_command` (e.g., `npm test`)
+- `build_test.sideload_command`
+- `changelog.version_command`
+
+For each configured command, extract the first word (the binary name) and check if a matching
+`Bash({binary}:*)` pattern exists in `permissions.allow`. For example:
+- `npm run lint` → needs `Bash(npm:*)` (already in required list)
+- `./gradlew test` → needs `Bash(./gradlew:*)`
+- `mvn test` → needs `Bash(mvn:*)`
+
+Report any dynamic commands whose binary prefix is NOT covered by existing patterns.
+
+#### Fix action
+
+**If any patterns from 11a are missing:** offer to add them to `~/.claude/settings.json`
+by editing the `permissions.allow` array.
+
+**If additionalDirectories is wrong (11b):** offer to fix it.
+
+**If dynamic commands are uncovered (11c):** offer to add the missing `Bash({binary}:*)`
+patterns. These are project-specific, so also suggest adding them to the project-level
+`.claude/settings.json` if one exists.
 
 **Dashboard mapping:**
-- All patterns present → OK
-- Some missing → ERR: list missing patterns
+- All checks pass → OK
+- Any missing → ERR: list what's missing
 
 ---
 
