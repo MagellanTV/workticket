@@ -11,12 +11,13 @@ missing or misconfigured dependency, walks the developer through setup.
 ## Execution order
 
 1. Bootstrap `.claude/alfred-code/` if it doesn't exist
-2. Ensure CLAUDE.md exists — if missing, run `/init` before continuing
-3. Read `.claude/alfred-code/config.md`
-4. If `reconfigure` argument: run interactive config walkthrough, then continue to step 5
-5. Run ALL dependency checks below (1 through 11) — do not skip any
-6. Present dashboard
-7. Walk through fixes for failed checks
+2. Update `.gitignore` to exclude alfred-code and graphify working files
+3. Ensure CLAUDE.md exists — if missing, run `/init` before continuing
+4. Read `.claude/alfred-code/config.md`
+5. If `reconfigure` argument: run interactive config walkthrough, then continue to step 6
+6. Run ALL dependency checks below (1 through 11) — do not skip any
+7. Present dashboard
+8. Walk through fixes for failed checks
 
 IMPORTANT: You MUST run every numbered check below (1 through 11). Read the config file first,
 then use its values in each check. Do not skip checks because a field is empty — report it as
@@ -47,7 +48,46 @@ If MISSING:
    ```
 3. Tell the developer: "Created `.claude/alfred-code/`. Please fill in `config.md` or run `alfred-code setup reconfigure`."
 
-## Step 2: Ensure CLAUDE.md exists
+## Step 2: Update .gitignore
+
+Ensure the project's `.gitignore` excludes alfred-code working files and graphify output.
+These are local workflow artifacts that should not be committed to the repository.
+
+Required entries:
+
+```
+# alfred-code workflow data
+.claude/alfred-code/plans/
+.claude/alfred-code/history/
+.claude/alfred-code/review/
+
+# graphify output
+graphify-out/
+```
+
+Note: `.claude/alfred-code/config.md` is NOT ignored — it should be committed so the whole
+team shares the same workflow configuration.
+
+Check which entries are already present and only add the missing ones:
+
+```bash
+test -f .gitignore && echo "EXISTS" || echo "MISSING"
+```
+
+If `.gitignore` is MISSING, create it with the entries above.
+
+If `.gitignore` EXISTS, check each entry:
+
+```bash
+echo "=== PLANS ===" && grep -qF '.claude/alfred-code/plans/' .gitignore 2>/dev/null && echo "FOUND" || echo "MISSING" && echo "=== HISTORY ===" && grep -qF '.claude/alfred-code/history/' .gitignore 2>/dev/null && echo "FOUND" || echo "MISSING" && echo "=== REVIEW ===" && grep -qF '.claude/alfred-code/review/' .gitignore 2>/dev/null && echo "FOUND" || echo "MISSING" && echo "=== GRAPHIFY ===" && grep -qF 'graphify-out/' .gitignore 2>/dev/null && echo "FOUND" || echo "MISSING"
+```
+
+For each MISSING entry, append it to `.gitignore`. Group new entries under their comment
+header. Do NOT duplicate entries that already exist.
+
+After updating, report: "Updated `.gitignore` to exclude workflow artifacts."
+
+## Step 3: Ensure CLAUDE.md exists
 
 Check if a CLAUDE.md file exists in the project root:
 
@@ -66,9 +106,9 @@ This runs the codebase analysis and creates CLAUDE.md with project-specific docu
 the generated CLAUDE.md provides context that improves the rest of the setup.
 
 Do NOT skip this step. Do NOT ask the developer whether to run it — just run it.
-If CLAUDE.md already exists, continue to Step 3.
+If CLAUDE.md already exists, continue to Step 4.
 
-## Step 3: Read config
+## Step 4: Read config
 
 Use the Read tool (not bash) to read `.claude/alfred-code/config.md`:
 
@@ -79,7 +119,7 @@ Read({ file_path: ".claude/alfred-code/config.md" })
 Parse every YAML block to extract current values. You need these for all checks below.
 Do NOT use `cat` or `Bash` to read this file — the Read tool does not require permission prompts.
 
-## Step 4: Interactive reconfigure (only with `reconfigure` argument)
+## Step 5: Interactive reconfigure (only with `reconfigure` argument)
 
 Walk through each section of `.claude/alfred-code/config.md`. For each section:
 - Show the current values
@@ -88,21 +128,21 @@ Walk through each section of `.claude/alfred-code/config.md`. For each section:
 
 Sections in order:
 
-### 4.1 Project basics
+### 5.1 Project basics
 Show: name, language, framework, base_branch. For base_branch, run:
 ```bash
 git branch -r | sed 's/  origin\///' | sort -u | head -20
 ```
 Show the list and let the developer pick.
 
-### 4.2 Branch naming
+### 5.2 Branch naming
 Show: pattern, type_mapping, username_format.
 
-### 4.3 Ticket system
+### 5.3 Ticket system
 Show: provider, base_url, auth_method, env_vars.
 Ask which provider (jira / linear / github-issues).
 
-### 4.4 Code review skill
+### 5.4 Code review skill
 Show: skill_name, skill_path, review_references.
 List available skills:
 ```bash
@@ -110,16 +150,16 @@ ls ~/.claude/skills/*/SKILL.md 2>/dev/null
 ls .claude/skills/*/SKILL.md 2>/dev/null
 ```
 
-### 4.5 Linter
+### 5.5 Linter
 Show: command, fix_command, style_checks.
 
-### 4.6 Build & test
+### 5.6 Build & test
 Show: build_command, test_command, test_type, device_verify.
 
-### 4.7 PR template
+### 5.7 PR template
 Show: template_path, checklist_auto_check, labels_mapping, path_labels.
 
-### 4.8 Knowledge base (graphify)
+### 5.8 Knowledge base (graphify)
 Show: graphify_enabled, graphify_rebuild, codebase_search, claude_md_path.
 
 If developer sets `graphify_enabled: true`:
@@ -130,7 +170,7 @@ If developer sets `graphify_enabled: true`:
 5. If yes, run: `graphify build` (or `/graphify` skill if available)
 6. Ask what rebuild command to use and save it to config
 
-### 4.9 Changelog
+### 5.9 Changelog
 Show: enabled, file, version_source, version_command, format.
 
 If enabled, auto-detect version source by checking which files exist:
@@ -141,7 +181,7 @@ Suggest the first match as `version_source`. If none found, suggest `auto` (will
 
 Ask which changelog format: keep-a-changelog (recommended) or simple.
 
-### 4.10 Git preferences
+### 5.10 Git preferences
 Show: auto_commit, auto_push, commit_format, co_author.
 
 After all sections: write the updated config.md, then continue to dependency checks.
@@ -294,7 +334,7 @@ test -f ~/.claude/skills/alfred-code/SKILL.md && echo "INSTALLED" || echo "MISSI
 
 ### Check 10: CLAUDE.md
 
-Verify that CLAUDE.md exists in the project root (it should — Step 2 creates it if missing):
+Verify that CLAUDE.md exists in the project root (it should — Step 3 creates it if missing):
 
 ```bash
 test -f CLAUDE.md && echo "EXISTS" || echo "MISSING"
