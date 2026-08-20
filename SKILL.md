@@ -25,7 +25,16 @@ Parse the first argument to decide which mode to run:
 
 ## Workflow mode: `workticket <TICKET-ID>`
 
-**First time?** If Phase 01 (preflight) detects missing dependencies or `.claude/workticket/config.md` does not exist, run setup mode automatically before proceeding.
+**First time?** Project setup is done by the installer, not from here:
+
+```bash
+npx workticket install   # once per machine
+npx workticket init      # once per repo
+```
+
+If Phase 01 finds no `.claude/workticket/config.md`, stop and point the developer at `npx
+workticket init` rather than creating files yourself — each write from here costs a permission
+prompt, which is what the installer exists to avoid.
 
 ## File Layout
 
@@ -65,13 +74,14 @@ The skill separates **engine** (global, shared across projects) from **project d
     └── README.md
 ```
 
-**On first run in a project**: if `.claude/workticket/config.md` does not exist, run setup mode automatically. Do not ask — just run it.
+**On first run in a project**: if `.claude/workticket/config.md` does not exist, stop and tell the
+developer to run `npx workticket init`. Do not bootstrap the directory yourself.
 
-**Migrating from `alfred-code`**: this skill was previously named `alfred-code`. If a project has
-`.claude/alfred-code/` and no `.claude/workticket/`, Phase 01 renames it in place (with `git mv`
-when tracked) and rewrites stale paths inside the migrated files — config, plans, history, and
-lessons all carry over, and setup is NOT re-run. If both directories exist, the workflow stops and
-asks which to keep. See `phases/01-preflight.md` step 1 and `setup/setup.md` Step 0.
+**Migrating from `alfred-code`**: this skill was previously named `alfred-code`. `npx workticket
+init` detects a legacy `.claude/alfred-code/` directory and renames it in place — `git mv` when
+tracked so file history follows — then rewrites stale paths inside the migrated files and in
+`.gitignore`. Config, plans, history and lessons all carry over, and a config that already exists
+is never overwritten. If both directories exist it refuses to merge them and asks which to keep.
 
 Load files lazily — read phase/agent files only when you reach that step.
 
@@ -239,16 +249,18 @@ All agent prompts include: ticket ID, ticket summary, config-driven project cont
 - **Git conflicts**: Stop, ask developer
 - **No test command configured**: Skip testing, warn
 - **Agent fails**: Report, continue with manual fallback
-- **Missing config**: Run setup mode automatically
+- **Missing config**: Stop and point the developer at `npx workticket init`
 - **Config field empty**: Skip that feature, warn
 
 ---
 
 ## Notes
 
-- Use `workticket setup` to configure dependencies for a new project
-- Use `workticket setup reconfigure` to update an existing config interactively
+- Use `npx workticket install` once per machine and `npx workticket init` once per repo
+- Use `npx workticket doctor` to check a setup without writing anything
+- Use `workticket setup` to verify the setup from inside Claude Code, and
+  `workticket setup reconfigure` to walk the config field by field
 - Project data (plans, history, lessons) lives in `.claude/workticket/` per repo
-- Projects still on `.claude/alfred-code/` are migrated automatically on the next run
+- Projects still on `.claude/alfred-code/` are migrated by `npx workticket init`
 - The workflow engine (this skill) is global and project-agnostic
 - If a code review skill is configured, it handles all review (not generic /code-review)

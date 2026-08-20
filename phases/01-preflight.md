@@ -17,31 +17,18 @@ echo "=== CURRENT ===" && test -d .claude/workticket && echo "EXISTS" || echo "N
 | CURRENT | LEGACY | Action |
 |---|---|---|
 | EXISTS | NONE | Continue to step 2 |
-| EXISTS | EXISTS | Stop — hand off to `setup/setup.md` Step 0, which asks which to keep |
-| NONE | EXISTS | **Migrate** (below), then continue to step 2 |
-| NONE | NONE | **First run** — bootstrap (below) |
+| EXISTS | EXISTS | Stop. Tell the developer to run `npx workticket init`, which shows both directories and asks which to keep. |
+| NONE | EXISTS | Stop. Tell the developer: "This project uses the old `.claude/alfred-code/` layout. Run `npx workticket init` — it migrates with `git mv` so file history follows, and preserves your config, plans, history and lessons." |
+| NONE | NONE | Stop. Tell the developer: "This project isn't set up yet. Run `npx workticket init`." |
 
-**Migrate** — never re-run setup over a legacy project, the accumulated lessons are the point:
+Do not create, copy, or move any of these files yourself. The installer does it in one portable
+pass with a backup and a `--dry-run`; doing it from here costs a permission prompt per write, and
+the shell one-liners that used to live in this file relied on BSD `sed -i ''` and broke on Linux.
 
-```bash
-git ls-files --error-unmatch .claude/alfred-code >/dev/null 2>&1 && git mv .claude/alfred-code .claude/workticket || mv .claude/alfred-code .claude/workticket
-```
-
-Then rewrite stale paths inside the migrated files and the project `.gitignore`:
-
-```bash
-grep -rIil 'alfred-code' .claude/workticket .gitignore 2>/dev/null | tr '\n' '\0' | xargs -0 -r sed -i '' -e 's|alfred-code|workticket|g' -e 's|Alfred-code|Workticket|g'
-```
-
-Tell the developer: "Migrated `.claude/alfred-code/` → `.claude/workticket/` (config, plans,
-history, and lessons preserved)." Then continue — do not stop for approval and do not run setup.
-
-**Bootstrap** — first run in this project:
-1. Create it with subdirectories: `plans/`, `review/`, `history/`
-2. Copy the config template from `~/.claude/skills/workticket/templates/config.md` to `.claude/workticket/config.md`
-3. Copy boilerplate files from `templates/` (plans-README.md, history-README.md, lessons.md)
-4. Tell the developer: "First time using workticket in this project. Please fill in `.claude/workticket/config.md` before continuing."
-5. Stop and wait — do not proceed until config is filled.
+If the developer says the installer is not available, you may fall back to copying the templates
+from `~/.claude/skills/workticket/templates/` by hand — but say plainly that you are doing a
+partial setup, and never attempt the legacy migration this way: a half-moved data directory is
+worse than an unmigrated one.
 
 ### 2. Working tree + branch + fetch
 
@@ -90,4 +77,4 @@ Check each configured tool:
 - Knowledge: graphify ready / grep fallback
 ```
 
-If any required tool is missing, suggest: "Run `workticket setup` to configure."
+If any required tool is missing, suggest: "Run `npx workticket doctor` to see everything at once."
