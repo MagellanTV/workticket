@@ -210,7 +210,7 @@ export function checkPermissions(cwd) {
   const missingDir = !gDirs.has(claudeDir());
   out.push(
     !missingGlobal.length && !missingDir
-      ? ok('perms-global', 'Permissions (global)', `~/.claude readable, ${gAllow.size} rules total`)
+      ? ok('perms-global', 'Permissions (global)', `~/.claude readable, ${gAllow.size} rule${gAllow.size === 1 ? '' : 's'} total`)
       : err(
           'perms-global',
           'Permissions (global)',
@@ -230,7 +230,7 @@ export function checkPermissions(cwd) {
   const missingProject = PROJECT_PERMISSIONS.filter((p) => !pAllow.includes(p));
   out.push(
     missingProject.length === 0
-      ? ok('perms-project', 'Permissions (project)', `${PROJECT_PERMISSIONS.length} rules in place`)
+      ? ok('perms-project', 'Permissions (project)', `${PROJECT_PERMISSIONS.length} rule${PROJECT_PERMISSIONS.length === 1 ? '' : 's'} in place`)
       : err(
           'perms-project',
           'Permissions (project)',

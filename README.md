@@ -7,33 +7,95 @@ A Claude Code skill that automates the full development cycle: from reading a ti
 - **Claude Code** (CLI, desktop, or web)
 - **Git** configured with user name and email
 - **GitHub CLI** (`gh`) authenticated
+- **Node 18+** — only to run the installer; the workflow itself never uses it
 - Ticket system: Jira, Linear, or GitHub Issues (optional)
 
 ## Installation
 
-1. Clone or copy this directory to `~/.claude/skills/workticket/`
-2. Register the skill in `~/.claude/CLAUDE.md`:
-   ```markdown
-   # workticket
-   - **workticket** (`~/.claude/skills/workticket/SKILL.md`) — ticket to PR workflow. Trigger: `/workticket`
-   ```
-3. Run setup in any project:
-   ```
-   /workticket setup
-   ```
+```bash
+npx workticket install
+```
+
+Run it once per machine. It installs the skill into `~/.claude/skills/workticket/`, registers it
+in `~/.claude/CLAUDE.md`, adds a read-only `~/.claude` grant to your global Claude Code settings,
+and — if you use Jira or Linear — prompts for an API token with the input hidden and writes it to
+`~/.claude/.{provider}-env` at mode 600.
+
+Then once per project:
+
+```bash
+npx workticket init
+```
+
+This creates `.claude/workticket/` with a `config.md` pre-filled from what the repo actually
+contains (it reads `pom.xml`, `build.gradle`, `package.json`, `pyproject.toml`, `go.mod` or a Roku
+`manifest` to work out the stack, linter, test command and version source), updates `.gitignore`,
+migrates a legacy `.claude/alfred-code/` directory if it finds one, and scopes the workflow's
+permissions to that repo.
+
+Both commands are idempotent — re-running them reports "already present" and writes nothing. Add
+`--dry-run` to see every change without making it, or `--yes` for non-interactive use.
+
+To check a setup without changing anything:
+
+```bash
+npx workticket doctor
+```
+
+### Why an installer instead of doing it in Claude Code
+
+The setup is almost entirely deterministic — create directories, copy templates, merge JSON,
+append to `.gitignore` — and running it from inside Claude Code means a permission prompt for
+every one of those writes. Worse, it is circular: the setup's whole job is to grant the
+permissions that would let it run without prompting.
+
+The installer breaks that loop, and it has no dependencies beyond Node 18, so `npx` needs no
+install step. Node is only required to *set up* the skill; the workflow itself never touches it.
+
+### How permissions are scoped
+
+Two files, split by blast radius:
+
+| File | Contents | Scope |
+|---|---|---|
+| `~/.claude/settings.json` | `Read(~/.claude/**)` and `additionalDirectories` | machine-wide, read-only |
+| `.claude/settings.local.json` | the `Bash(...)`, `Read`, `Edit` and `Write` rules | that repo only |
+
+Bare `Edit(**)` and `Write(**)` in the *global* file would disable the write-permission prompt
+for every project on your machine, permanently. That is a defensible personal choice, but a bad
+thing for an installer to do to everyone, so the broad grants are confined to the repository
+where the workflow runs. `init` also adds the binaries your own commands need — `Bash(mvn:*)`,
+`Bash(./gradlew:*)` and so on — derived from what it detected.
+
+Before touching either file the installer prints the exact entries it would add, backs the file
+up, and waits for a yes. It only ever appends: nothing already in the file is removed, reordered
+or rewritten, and a file it cannot parse aborts the merge rather than being overwritten.
+
+### Manual installation
+
+If you would rather not use npm, copy this directory to `~/.claude/skills/workticket/` and add
+the registration to `~/.claude/CLAUDE.md` by hand:
+
+```markdown
+# workticket
+- **workticket** (`~/.claude/skills/workticket/SKILL.md`) — ticket to PR workflow. Trigger: `/workticket`
+```
+
+You will then need to add the permission rules yourself, or accept a prompt per file write.
 
 ### Upgrading from `alfred-code`
 
 This skill was previously named `alfred-code`. If you have the old version installed:
 
 1. Remove the old skill directory: `rm -rf ~/.claude/skills/alfred-code/`
-2. Update the registration in `~/.claude/CLAUDE.md` to the `workticket` entry above.
+2. Run `npx workticket install` to register the new one.
 
-Your **projects need no manual work**. On the next `/workticket TICKET-ID` run, Phase 01 detects a
-legacy `.claude/alfred-code/` directory and migrates it in place: `git mv` when the directory is
-tracked (so file history follows the rename), plain `mv` otherwise. The config, every plan, every
-history entry, and `lessons.md` are preserved, path references inside those files are rewritten,
-and the stale `.gitignore` entries are replaced. Setup is not re-run.
+Your **projects need no manual work**. Run `npx workticket init` in each repo, or just start the
+workflow — both paths detect a legacy `.claude/alfred-code/` directory and migrate it in place:
+`git mv` when the directory is tracked (so file history follows the rename), plain `mv` otherwise.
+The config, every plan, every history entry, and `lessons.md` are preserved, path references
+inside those files are rewritten, and the stale `.gitignore` entries are replaced. A config you
+already had is never overwritten.
 
 If a project somehow ends up with *both* `.claude/alfred-code/` and `.claude/workticket/`, the
 workflow stops and asks which to keep rather than merging them — nothing is deleted without your
@@ -43,13 +105,22 @@ explicit confirmation.
 
 ### Set up a new project
 
+```bash
+npx workticket init
+```
+
+See [Installation](#installation) above for what it does. Once the project is set up, use the
+skill from inside Claude Code to verify and refine the generated config:
+
 ```
 /workticket setup
 ```
 
-Checks 11 dependencies (git, gh, ticket system, linter, tests, permissions, etc.), creates the `.claude/workticket/` directory in the project with the configuration file, and walks you through fixing anything that's missing.
+That runs the 11 dependency checks (git, gh, ticket system, linter, tests, permissions, ...) and
+walks you through anything missing. It no longer creates or copies files — the installer owns
+that, so you are not answering a permission prompt per write.
 
-To reconfigure interactively:
+To walk through the config field by field:
 
 ```
 /workticket setup reconfigure
@@ -61,7 +132,8 @@ To reconfigure interactively:
 /workticket TICKET-ID
 ```
 
-Where `TICKET-ID` is the ticket identifier (e.g. `PROJ-123`, `BUG-456`). If the project isn't configured yet, setup runs automatically.
+Where `TICKET-ID` is the ticket identifier (e.g. `PROJ-123`, `BUG-456`). If the project isn't
+configured yet, the workflow tells you to run `npx workticket init` first.
 
 ## The 12 Phases
 
@@ -202,19 +274,25 @@ No extra configuration needed — uses the GitHub CLI (`gh`).
 
 ## Claude Code Permissions
 
-Setup (Check 11) verifies that `~/.claude/settings.json` has the permissions needed so the workflow doesn't prompt for authorization on every operation. The permissions cover:
+`npx workticket install` and `npx workticket init` write these; `/workticket setup` (Check 11)
+and `npx workticket doctor` verify them. See [How permissions are scoped](#how-permissions-are-scoped)
+for the split and the reasoning.
 
-- Common bash commands (git, gh, grep, find, curl, npm, node, python, etc.)
-- Reading, editing, and writing project files and `~/.claude/` files
-- Access to `~/.claude/` as an additional directory
-- Dynamic project commands (linter, test runner) detected from the project config
+| Scope | File | Contents |
+|---|---|---|
+| Machine | `~/.claude/settings.json` | `Read(~/.claude/**)`, `additionalDirectories: [~/.claude]` |
+| Repo | `.claude/settings.local.json` | bash commands the phases run, plus `Read`/`Edit`/`Write` |
+| Repo | `.claude/settings.local.json` | your project's own binaries, e.g. `Bash(mvn:*)`, `Bash(./gradlew:*)` |
 
-If any permissions are missing, setup reports them and offers to add them automatically.
+If anything is missing, both `setup` and `doctor` name the exact command that fixes it.
 
 ## Quick Reference
 
 | Command | Action |
 |---------|--------|
-| `/workticket setup` | Configure a new project |
+| `npx workticket install` | Set up this machine (once) |
+| `npx workticket init` | Set up a project (once per repo) |
+| `npx workticket doctor` | Check everything; writes nothing |
+| `/workticket setup` | Verify and refine the config from inside Claude Code |
 | `/workticket setup reconfigure` | Reconfigure interactively |
 | `/workticket PROJ-123` | Run the full workflow for ticket PROJ-123 |

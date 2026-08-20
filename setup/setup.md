@@ -1,24 +1,40 @@
 # workticket setup — Dependency Configuration
 
-Checks every tool and integration that workticket needs for the current project. For each
-missing or misconfigured dependency, walks the developer through setup.
+Verifies that workticket is correctly set up for the current project, and walks the developer
+through the parts that need judgement.
+
+## What this file does NOT do
+
+Creating directories, copying templates, editing `.gitignore`, merging permission rules,
+writing credential files and migrating a legacy `.claude/alfred-code/` directory all belong to
+the installer, not here:
+
+```bash
+npx workticket init
+```
+
+Those steps are deterministic, and doing them from inside Claude Code means a permission prompt
+for every single file write — which is exactly what made this setup tedious. They were also
+written as `sed -i ''` blocks, which is BSD-only and fails under GNU sed on Linux. The
+installer does them in one portable, idempotent pass with a `--dry-run` and a backup.
+
+What stays here is what a script cannot decide: which review skill to use, which of several
+plausible commands is the real linter, how the branch naming should read, and whether a failing
+check matters for this project.
 
 ## Trigger
 
-- `workticket setup` — check dependencies and guide fixes
+- `workticket setup` — verify the setup and guide fixes
 - `workticket setup reconfigure` — interactive walkthrough to update config.md
 
 ## Execution order
 
-1. Migrate a legacy `.claude/alfred-code/` directory if one is present
-2. Bootstrap `.claude/workticket/` if it doesn't exist
-3. Update `.gitignore` to exclude workticket and graphify working files
-4. Ensure CLAUDE.md exists — if missing, run `/init` before continuing
-5. Read `.claude/workticket/config.md`
-6. If `reconfigure` argument: run interactive config walkthrough, then continue to step 7
-7. Run ALL dependency checks below (1 through 11) — do not skip any
-8. Present dashboard
-9. Walk through fixes for failed checks
+1. Confirm the installer has run (below). If not, tell the developer to run it and stop.
+2. Read `.claude/workticket/config.md`
+3. If `reconfigure` argument: run the interactive config walkthrough
+4. Run ALL dependency checks below (1 through 11) — do not skip any
+5. Present the dashboard
+6. Walk through fixes for failed checks
 
 IMPORTANT: You MUST run every numbered check below (1 through 11). Read the config file first,
 then use its values in each check. Do not skip checks because a field is empty — report it as
@@ -29,152 +45,34 @@ reduce the number of tool invocations. The checks below show the batched form.
 
 ---
 
-## Step 0: Migrate legacy `.claude/alfred-code/`
-
-The skill was previously named `alfred-code`. Projects set up under the old name keep their
-plans, history, and lessons in `.claude/alfred-code/`. Migrate that data instead of starting
-over — the accumulated lessons are the most valuable part of it.
+## Step 0: Confirm the installer has run
 
 ```bash
-echo "=== LEGACY ===" && test -d .claude/alfred-code && echo "EXISTS" || echo "NONE" && echo "=== CURRENT ===" && test -d .claude/workticket && echo "EXISTS" || echo "NONE" && echo "=== TRACKED ===" && git ls-files --error-unmatch .claude/alfred-code >/dev/null 2>&1 && echo "YES" || echo "NO"
+echo "=== DATA_DIR ===" && test -d .claude/workticket && echo "EXISTS" || echo "MISSING" && echo "=== CONFIG ===" && test -f .claude/workticket/config.md && echo "EXISTS" || echo "MISSING" && echo "=== LEGACY ===" && test -d .claude/alfred-code && echo "EXISTS" || echo "NONE"
 ```
 
-Route on the two directory results:
+| Result | Action |
+|---|---|
+| CONFIG EXISTS | Continue to Step 1 |
+| CONFIG MISSING, LEGACY NONE | Tell the developer: "Run `npx workticket init` first — it creates the config from what this repo actually contains." Stop. |
+| LEGACY EXISTS | Tell the developer: "This project still uses the old `.claude/alfred-code/` layout. Run `npx workticket init` — it migrates the directory with `git mv` so file history follows, and preserves your plans, history and lessons." Stop. |
 
-| LEGACY | CURRENT | Action |
-|---|---|---|
-| NONE | any | Nothing to migrate — continue to Step 1 |
-| EXISTS | NONE | Migrate (below) |
-| EXISTS | EXISTS | **Stop and ask** — do not merge or overwrite |
+Do not create the directory or the config yourself. If the installer is unavailable for some
+reason, the templates in `~/.claude/skills/workticket/templates/` can be copied by hand, but
+say so explicitly rather than silently doing a partial setup.
 
-### If LEGACY EXISTS and CURRENT is NONE
+## Step 1: Read config
 
-Move the directory. Use `git mv` when the legacy path is TRACKED, so history follows the
-rename; plain `mv` otherwise (the working files are usually gitignored):
-
-```bash
-git mv .claude/alfred-code .claude/workticket
-```
-
-```bash
-mv .claude/alfred-code .claude/workticket
-```
-
-Then rewrite stale paths *inside* the migrated files — old plans, history entries, and
-`lessons.md` reference `.claude/alfred-code/` and `~/.claude/skills/alfred-code/`:
-
-```bash
-grep -rIil 'alfred-code' .claude/workticket 2>/dev/null | tr '\n' '\0' | xargs -0 -r sed -i '' -e 's|alfred-code|workticket|g' -e 's|Alfred-code|Workticket|g'
-```
-
-Report what moved:
-
-```bash
-echo "=== MIGRATED ===" && ls .claude/workticket && echo "=== COUNTS ===" && echo "plans: $(ls .claude/workticket/plans 2>/dev/null | wc -l | tr -d ' ')" && echo "history: $(ls .claude/workticket/history 2>/dev/null | wc -l | tr -d ' ')"
-```
-
-Tell the developer:
+Use the Read tool (not bash) to read `.claude/workticket/config.md`:
 
 ```
-Migrated `.claude/alfred-code/` → `.claude/workticket/`
-- config.md carried over (no re-setup needed)
-- {N} plan files, {N} history entries, lessons.md preserved
-- internal path references updated
+Read({ file_path: ".claude/workticket/config.md" })
 ```
 
-Step 1 will then find the directory EXISTS and skip bootstrapping, and Step 2 replaces the
-stale `.gitignore` entries.
+Parse every YAML block to extract current values. You need these for all checks below.
+Do NOT use `cat` or `Bash` to read this file — the Read tool does not require permission prompts.
 
-### If BOTH exist
-
-Do not merge automatically — the two directories may hold conflicting configs. Show what each
-contains and ask the developer which to keep:
-
-```bash
-echo "=== LEGACY ===" && find .claude/alfred-code -type f | sort && echo "=== CURRENT ===" && find .claude/workticket -type f | sort
-```
-
-Ask: "Both `.claude/alfred-code/` and `.claude/workticket/` exist. Keep the new one and delete
-the legacy directory, or copy specific files across first?" Wait for the answer. Never delete
-the legacy directory without an explicit yes.
-
-## Step 1: Bootstrap project directory
-
-```bash
-test -d .claude/workticket && echo "EXISTS" || echo "MISSING"
-```
-
-If MISSING:
-1. Create directories:
-   ```bash
-   mkdir -p .claude/workticket/plans .claude/workticket/review .claude/workticket/history
-   ```
-2. Copy templates:
-   ```bash
-   cp ~/.claude/skills/workticket/templates/config.md .claude/workticket/config.md
-   cp ~/.claude/skills/workticket/templates/plans-README.md .claude/workticket/plans/README.md
-   cp ~/.claude/skills/workticket/templates/history-README.md .claude/workticket/history/README.md
-   cp ~/.claude/skills/workticket/templates/lessons.md .claude/workticket/review/lessons.md
-   ```
-3. Tell the developer: "Created `.claude/workticket/`. Please fill in `config.md` or run `workticket setup reconfigure`."
-
-## Step 2: Update .gitignore
-
-Ensure the project's `.gitignore` excludes workticket working files and graphify output.
-These are local workflow artifacts that should not be committed to the repository.
-
-Required entries:
-
-```
-# workticket workflow data
-.claude/workticket/plans/
-.claude/workticket/history/
-.claude/workticket/review/
-
-# graphify output
-graphify-out/
-```
-
-Note: `.claude/workticket/config.md` is NOT ignored — it should be committed so the whole
-team shares the same workflow configuration.
-
-If the project was migrated in Step 0, `.gitignore` still carries the legacy entries. Replace
-them in place rather than appending duplicates:
-
-```bash
-grep -n 'alfred-code' .gitignore 2>/dev/null || echo "NO_LEGACY_ENTRIES"
-```
-
-If any are found, rewrite them:
-
-```bash
-sed -i '' -e 's|\.claude/alfred-code/|.claude/workticket/|g' -e 's|# alfred-code workflow data|# workticket workflow data|' .gitignore
-```
-
-Then run the presence check below — the rewritten entries will already read FOUND.
-
-Check which entries are already present and only add the missing ones:
-
-```bash
-test -f .gitignore && echo "EXISTS" || echo "MISSING"
-```
-
-If `.gitignore` is MISSING, create it with the entries above.
-
-If `.gitignore` EXISTS, check each entry:
-
-```bash
-echo "=== PLANS ===" && grep -qF '.claude/workticket/plans/' .gitignore 2>/dev/null && echo "FOUND" || echo "MISSING" && echo "=== HISTORY ===" && grep -qF '.claude/workticket/history/' .gitignore 2>/dev/null && echo "FOUND" || echo "MISSING" && echo "=== REVIEW ===" && grep -qF '.claude/workticket/review/' .gitignore 2>/dev/null && echo "FOUND" || echo "MISSING" && echo "=== GRAPHIFY ===" && grep -qF 'graphify-out/' .gitignore 2>/dev/null && echo "FOUND" || echo "MISSING"
-```
-
-For each MISSING entry, append it to `.gitignore`. Group new entries under their comment
-header. Do NOT duplicate entries that already exist.
-
-After updating, report: "Updated `.gitignore` to exclude workflow artifacts."
-
-## Step 3: Ensure CLAUDE.md exists
-
-Check if a CLAUDE.md file exists in the project root:
+## Step 2: Ensure CLAUDE.md exists
 
 ```bash
 test -f CLAUDE.md && echo "EXISTS" || echo "MISSING"
@@ -191,20 +89,8 @@ This runs the codebase analysis and creates CLAUDE.md with project-specific docu
 the generated CLAUDE.md provides context that improves the rest of the setup.
 
 Do NOT skip this step. Do NOT ask the developer whether to run it — just run it.
-If CLAUDE.md already exists, continue to Step 4.
 
-## Step 4: Read config
-
-Use the Read tool (not bash) to read `.claude/workticket/config.md`:
-
-```
-Read({ file_path: ".claude/workticket/config.md" })
-```
-
-Parse every YAML block to extract current values. You need these for all checks below.
-Do NOT use `cat` or `Bash` to read this file — the Read tool does not require permission prompts.
-
-## Step 5: Interactive reconfigure (only with `reconfigure` argument)
+## Step 3: Interactive reconfigure (only with `reconfigure` argument)
 
 Walk through each section of `.claude/workticket/config.md`. For each section:
 - Show the current values
@@ -213,21 +99,21 @@ Walk through each section of `.claude/workticket/config.md`. For each section:
 
 Sections in order:
 
-### 5.1 Project basics
+### 3.1 Project basics
 Show: name, language, framework, base_branch. For base_branch, run:
 ```bash
 git branch -r | sed 's/  origin\///' | sort -u | head -20
 ```
 Show the list and let the developer pick.
 
-### 5.2 Branch naming
+### 3.2 Branch naming
 Show: pattern, type_mapping, username_format.
 
-### 5.3 Ticket system
+### 3.3 Ticket system
 Show: provider, base_url, auth_method, env_vars.
 Ask which provider (jira / linear / github-issues).
 
-### 5.4 Code review skill
+### 3.4 Code review skill
 Show: skill_name, skill_path, review_references.
 List available skills:
 ```bash
@@ -235,16 +121,16 @@ ls ~/.claude/skills/*/SKILL.md 2>/dev/null
 ls .claude/skills/*/SKILL.md 2>/dev/null
 ```
 
-### 5.5 Linter
+### 3.5 Linter
 Show: command, fix_command, style_checks.
 
-### 5.6 Build & test
+### 3.6 Build & test
 Show: build_command, test_command, test_type, device_verify.
 
-### 5.7 PR template
+### 3.7 PR template
 Show: template_path, checklist_auto_check, labels_mapping, path_labels.
 
-### 5.8 Knowledge base (graphify)
+### 3.8 Knowledge base (graphify)
 Show: graphify_enabled, graphify_rebuild, codebase_search, claude_md_path.
 
 If developer sets `graphify_enabled: true`:
@@ -255,7 +141,7 @@ If developer sets `graphify_enabled: true`:
 5. If yes, run: `graphify build` (or `/graphify` skill if available)
 6. Ask what rebuild command to use and save it to config
 
-### 5.9 Changelog
+### 3.9 Changelog
 Show: enabled, file, version_source, version_command, format.
 
 If enabled, auto-detect version source by checking which files exist:
@@ -266,7 +152,7 @@ Suggest the first match as `version_source`. If none found, suggest `auto` (will
 
 Ask which changelog format: keep-a-changelog (recommended) or simple.
 
-### 5.10 Git preferences
+### 3.10 Git preferences
 Show: auto_commit, auto_push, commit_format, co_author.
 
 After all sections: write the updated config.md, then continue to dependency checks.
@@ -333,24 +219,30 @@ source ~/.claude/.jira-env && curl -s -o /dev/null -w "%{http_code}" -u "$JIRA_U
 ```
 200 = OK. 401 = bad credentials. 403 = permissions. Other = network issue.
 
-If `~/.claude/.jira-env` does not exist or variables are missing, guide:
+If `~/.claude/.jira-env` does not exist or variables are missing, hand it to the installer:
+
 ```
-1. Go to https://id.atlassian.com/manage-profile/security/api-tokens
-2. Click "Create API token", name it "dev-workflow"
-3. Copy the token
-4. Create ~/.claude/.jira-env with:
-   export JIRA_BASE_URL="https://your-instance.atlassian.net"
-   export JIRA_USER_EMAIL="your-email"
-   export JIRA_API_TOKEN="your-token"
+Run: npx workticket install --provider=jira
+
+It links you to https://id.atlassian.com/manage-profile/security/api-tokens, prompts for the
+token with the input hidden, verifies it against the API, and writes ~/.claude/.jira-env at
+mode 600.
 ```
-Do NOT ask the developer to add anything to ~/.zshrc. The setup sources ~/.claude/.jira-env directly.
+
+Never ask the developer to paste a token into this conversation, and never write the file
+yourself — a token in the transcript is a leaked token. Do NOT suggest adding anything to
+~/.zshrc either: an `export JIRA_API_TOKEN=...` there leaks the token into every process they
+start. The workflow sources ~/.claude/.jira-env directly.
 
 **If provider is "linear":**
 
-Source credentials and check in a single batched call:
+Source credentials and check in a single batched call. Note the `:+(set)` form — it reports
+whether the key exists without ever printing it:
 ```bash
 source ~/.claude/.linear-env 2>/dev/null && echo "LINEAR_API_KEY=${LINEAR_API_KEY:+(set)}"
 ```
+
+If it is missing: `npx workticket install --provider=linear`.
 If set, test connectivity:
 ```bash
 source ~/.claude/.linear-env && curl -s -o /dev/null -w "%{http_code}" -X POST https://api.linear.app/graphql -H "Authorization: $LINEAR_API_KEY" -d '{"query": "{ viewer { id } }"}'
@@ -434,84 +326,78 @@ run `/init` again.
 
 ### Check 11: Claude Code permissions
 
-Read `~/.claude/settings.json` using the Read tool (not bash). Verify these two things:
+Permissions are split across two files by scope. Read both with the Read tool (not bash).
 
-#### 11a — Required permission patterns
+#### 11a — Global scope: `~/.claude/settings.json`
 
-Check that `permissions.allow` contains ALL of these patterns:
+Only two things belong here, because this file applies to every project on the machine:
 
 ```
-Bash(git:*)
-Bash(gh:*)
-Bash(grep:*)
-Bash(find:*)
-Bash(ls:*)
-Bash(echo:*)
-Bash(cat:*)
-Bash(sed:*)
-Bash(sort:*)
-Bash(head:*)
-Bash(wc:*)
-Bash(test -d:*)
-Bash(test -f:*)
-Bash(command -v:*)
-Bash(mkdir -p:*)
-Bash(cp:*)
-Bash(source:*)
-Bash(curl:*)
-Bash(npm:*)
-Bash(node:*)
-Bash(python:*)
-Bash(python3:*)
-Bash(pip3:*)
-Bash(graphify:*)
-Bash(chmod:*)
-Bash(bash:*)
-Read(**)
-Read(~/.claude/**)
-Edit(**)
-Edit(~/.claude/**)
-Write(**)
-Write(~/.claude/**)
+permissions.allow                 must contain  Read(~/.claude/**)
+permissions.additionalDirectories must contain  <the developer's absolute ~/.claude path>
 ```
 
-#### 11b — additionalDirectories
+Resolve that path from `$HOME` at runtime — never hardcode one, since an absolute path from a
+different machine silently fails this check everywhere else. This grant is read-only and
+confined to `~/.claude`; it exists so the workflow can read `config.md` and the credential
+files without a prompt.
 
-Check that `permissions.additionalDirectories` includes `/Users/juanmanuel/.claude` (the full
-`~/.claude` directory, not just the skills subdirectory). This allows workticket to read
-`settings.json`, credential files, and other config without permission prompts.
+If either is missing, the fix is `npx workticket install` — do not add broad patterns here.
 
-#### 11c — Dynamic command permissions (project-specific)
+#### 11b — Project scope: `.claude/settings.local.json`
 
-Read the project's `.claude/workticket/config.md` and extract these commands if configured:
-- `linter.command` (e.g., `npm run lint`)
-- `linter.fix_command` (e.g., `npm run lint -- --fix`)
-- `build_test.test_command` (e.g., `npm test`)
-- `build_test.sideload_command`
+The patterns that actually remove the per-edit prompts live in the project file, so they apply
+only to this repository:
+
+```
+Bash(git:*)        Bash(gh:*)          Bash(grep:*)      Bash(find:*)
+Bash(ls:*)         Bash(cat:*)         Bash(head:*)      Bash(tail:*)
+Bash(wc:*)         Bash(sort:*)        Bash(echo:*)      Bash(sed:*)
+Bash(awk:*)        Bash(test -d:*)     Bash(test -f:*)   Bash(command -v:*)
+Bash(mkdir -p:*)   Bash(cp:*)          Bash(mv:*)        Bash(source:*)
+Bash(curl:*)       Read(**)            Edit(**)          Write(**)
+```
+
+An entry already present in the global file also counts as satisfied — check both before
+reporting something missing.
+
+If any are absent, the fix is `npx workticket init`.
+
+Why the split: bare `Edit(**)` and `Write(**)` in the *global* file disable the write-permission
+prompt for every project on the machine, permanently. That is a reasonable personal choice but a
+bad default to ship to everyone who installs the skill, so the broad grants are scoped to the
+repo where the workflow actually runs.
+
+#### 11c — Project command permissions
+
+Read `.claude/workticket/config.md` and extract these commands if configured:
+- `linter.command` (e.g. `npm run lint`)
+- `linter.fix_command` (e.g. `npm run lint -- --fix`)
+- `build_test.test_command` (e.g. `npm test`)
+- `build_test.build_command`, `build_test.sideload_command`
 - `changelog.version_command`
 
-For each configured command, extract the first word (the binary name) and check if a matching
-`Bash({binary}:*)` pattern exists in `permissions.allow`. For example:
-- `npm run lint` → needs `Bash(npm:*)` (already in required list)
+For each, take the first word (the binary) and check whether a matching `Bash({binary}:*)`
+pattern exists in either file:
+- `npm run lint` → needs `Bash(npm:*)`
 - `./gradlew test` → needs `Bash(./gradlew:*)`
 - `mvn test` → needs `Bash(mvn:*)`
 
-Report any dynamic commands whose binary prefix is NOT covered by existing patterns.
+`npx workticket init` derives these from the detected commands and adds them to the project
+file. Report anything still uncovered — it usually means the config was edited by hand after
+init ran.
 
 #### Fix action
 
-**If any patterns from 11a are missing:** offer to add them to `~/.claude/settings.json`
-by editing the `permissions.allow` array.
-
-**If additionalDirectories is wrong (11b):** offer to fix it.
-
-**If dynamic commands are uncovered (11c):** offer to add the missing `Bash({binary}:*)`
-patterns. These are project-specific, so also suggest adding them to the project-level
-`.claude/settings.json` if one exists.
+For all three: report what is missing and which command fixes it (`install` for 11a, `init` for
+11b and 11c). Offer to edit the files directly only if the developer says the installer is not
+an option — and if you do, add to `.claude/settings.local.json`, never broad patterns to the
+global file.
 
 **Dashboard mapping:**
-- All checks pass → OK
-- Any missing → ERR: list what's missing
+- All three pass → OK
+- Global missing → ERR: "run npx workticket install"
+- Project or command patterns missing → ERR: list what is missing, "run npx workticket init"
 
 ---
 
@@ -534,7 +420,7 @@ After ALL checks complete, present this table:
 | 8  | Graphify            | OK/N/A | {status detail}                |
 | 9  | workticket skill   | OK/ERR | {path}                         |
 | 10 | CLAUDE.md           | OK/ERR | {exists or "created by /init"} |
-| 11 | Claude permissions  | OK/ERR | {N} patterns OK / {M} missing  |
+| 11 | Claude permissions  | OK/ERR | global: {status}, project: {status} |
 ```
 
 Legend: OK = ready, ERR = missing/broken, N/A = not configured (optional)
@@ -547,7 +433,9 @@ For each ERR item:
 3. After fix: re-check that specific dependency
 4. Update the dashboard line
 
-**Never enter credentials, tokens, or passwords yourself.** Guide the developer.
+**Never enter credentials, tokens, or passwords yourself.** For a missing token, point the
+developer at `npx workticket install`, which prompts for it with the input hidden and writes
+`~/.claude/.{provider}-env` at mode 600. Do not read, echo, or copy a token value.
 
 ## After setup
 
@@ -558,9 +446,12 @@ When all required dependencies pass:
 
 ## Re-running
 
-| Command | What it does |
-|---|---|
-| `workticket setup` | Run all checks, show dashboard, guide fixes |
-| `workticket setup reconfigure` | Update config.md interactively, then run all checks |
+| Command | What it does | Writes? |
+|---|---|---|
+| `workticket setup` | Run all checks, show dashboard, guide fixes | only config.md, and only when asked |
+| `workticket setup reconfigure` | Update config.md interactively, then run all checks | config.md |
+| `npx workticket doctor` | Same checks from the terminal, no Claude Code needed | never |
+| `npx workticket init` | Re-apply the deterministic project setup | yes, idempotently |
 
-Safe to run anytime — it only checks and guides, never modifies without asking.
+All are safe to run anytime. `setup` only checks and guides; it never modifies without asking.
+`doctor` writes nothing at all, so reach for it first when something is broken.
