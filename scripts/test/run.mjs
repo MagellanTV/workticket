@@ -680,20 +680,55 @@ await check('InputClosedError carries a stable code the CLI can branch on', () =
   ok(/stdin closed/.test(err.message), 'message explains the cause');
 });
 
+/**
+ * Run fn with stdin forced to look non-interactive, then restore it.
+ *
+ * These tests must never reach a real prompt. Asserting the ambient TTY state
+ * instead made the whole suite unrunnable from a terminal: the precondition
+ * failed, and then askSecret() opened an actual hidden-input prompt and blocked
+ * forever waiting to be typed into. Forcing the flag makes the test mean the
+ * same thing whether stdin is a pipe or a terminal.
+ */
+async function withoutTty(fn) {
+  const original = process.stdin.isTTY;
+  process.stdin.isTTY = false;
+  try {
+    return await fn();
+  } finally {
+    process.stdin.isTTY = original;
+  }
+}
+
 await check('prompts fall back instead of hanging when stdin is not a TTY', async () => {
-  // The suite runs with piped stdin, so isTTY is false here -- exactly the
-  // condition a CI run or a Bash-tool invocation produces.
-  ok(!process.stdin.isTTY, 'precondition: this suite runs without a TTY');
-  eq(await ask('anything?', 'fallback'), 'fallback', 'ask returns its fallback');
-  eq(await confirm('ok?', false), false, 'confirm returns its fallback');
-  eq(await choose('pick', ['a', 'b'], 'b'), 'b', 'choose returns its fallback');
-  eq(await askSecret('token?'), '', 'askSecret yields nothing rather than blocking');
+  await withoutTty(async () => {
+    eq(await ask('anything?', 'fallback'), 'fallback', 'ask returns its fallback');
+    eq(await confirm('ok?', false), false, 'confirm returns its fallback');
+    eq(await choose('pick', ['a', 'b'], 'b'), 'b', 'choose returns its fallback');
+    eq(await askSecret('token?'), '', 'askSecret yields nothing rather than blocking');
+  });
 });
 
 await check('askSecret never returns a value it could not have read', async () => {
   // Guards against a future refactor that makes the non-TTY path echo or
   // fabricate a secret. Empty is the only safe answer.
-  eq(await askSecret('token?'), '', 'empty');
+  await withoutTty(async () => {
+    eq(await askSecret('token?'), '', 'empty');
+  });
+});
+
+await check('no test can open an interactive prompt', () => {
+  // Every prompt call must sit inside a withoutTty callback, or `npm test` from
+  // a terminal hangs. Fail loudly if a bare one is ever added.
+  const src = readFileSync(new URL('./run.mjs', import.meta.url), 'utf8');
+  const helperAt = src.indexOf('async function withoutTty');
+  ok(helperAt > 0, 'helper is defined');
+  const offenders = [];
+  const re = /await (ask|confirm|choose|askSecret)\(/g;
+  let m;
+  while ((m = re.exec(src)) !== null) {
+    if (m.index < helperAt) offenders.push(m[1]);
+  }
+  eq(offenders, [], 'no prompt is called before the helper that guards it');
 });
 
 console.log('\nTicket providers');
