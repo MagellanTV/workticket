@@ -9,6 +9,12 @@ import { execFileSync } from 'node:child_process';
 import { planGitignore, applyGitignore, inspectLegacy, migrateLegacy, dataCounts, isTracked } from '../lib/project.mjs';
 import { detectProject } from '../lib/detect.mjs';
 import { tildify, findRepoRoot } from '../lib/paths.mjs';
+import {
+  readSettings, planMerge, applySettings, renderPlan, backupSettings,
+  uncoveredCommands, GLOBAL_PERMISSIONS, PROJECT_PERMISSIONS,
+} from '../lib/settings.mjs';
+import { parseConfig, parseBlock, setValue, applyEdits, editsFromDetection } from '../lib/config.mjs';
+import { parseEnvFile, renderEnvFile, PROVIDERS } from '../lib/keys.mjs';
 
 let passed = 0;
 const failures = [];
@@ -293,6 +299,338 @@ check('dataCounts ignores READMEs', () => {
   migrateLegacy(dir);
   const counts = dataCounts(join(dir, '.claude', 'workticket'));
   eq(counts, { plans: 1, history: 1 }, 'counts');
+});
+
+console.log('\nSettings merge');
+
+const settingsFixture = (name, content) => {
+  const dir = join(root, 'settings', name);
+  mkdirSync(dir, { recursive: true });
+  const file = join(dir, 'settings.json');
+  if (content !== null) writeFileSync(file, content);
+  return file;
+};
+
+check('creates a settings file that does not exist yet', () => {
+  const file = settingsFixture('fresh', null);
+  const res = applySettings({ file, permissions: GLOBAL_PERMISSIONS, directories: ['/home/x/.claude'] });
+  eq(res.existed, false, 'existed');
+  eq(res.wrote, true, 'wrote');
+  eq(res.backup, null, 'nothing to back up');
+  const data = JSON.parse(readFileSync(file, 'utf8'));
+  eq(data.permissions.allow, GLOBAL_PERMISSIONS, 'allow');
+  eq(data.permissions.additionalDirectories, ['/home/x/.claude'], 'dirs');
+});
+
+check('preserves unrelated top-level keys', () => {
+  const file = settingsFixture('unrelated', JSON.stringify({
+    theme: 'dark', effortLevel: 'high', hooks: { PreToolUse: [{ matcher: 'Bash' }] },
+    permissions: { allow: ['Bash(docker:*)'], defaultMode: 'acceptEdits' },
+  }));
+  applySettings({ file, permissions: PROJECT_PERMISSIONS });
+  const data = JSON.parse(readFileSync(file, 'utf8'));
+  eq(data.theme, 'dark', 'theme');
+  eq(data.effortLevel, 'high', 'effortLevel');
+  eq(data.hooks.PreToolUse[0].matcher, 'Bash', 'hooks');
+  eq(data.permissions.defaultMode, 'acceptEdits', 'defaultMode');
+});
+
+check('never removes or reorders what the user already had', () => {
+  const existing = ['Bash(docker:*)', 'Bash(kubectl:*)', 'Bash(git:*)'];
+  const file = settingsFixture('preserve', JSON.stringify({ permissions: { allow: existing } }));
+  applySettings({ file, permissions: PROJECT_PERMISSIONS });
+  const after = JSON.parse(readFileSync(file, 'utf8')).permissions.allow;
+  eq(after.slice(0, 3), existing, 'original entries kept in original order at the front');
+});
+
+check('never duplicates an entry the user already had', () => {
+  const file = settingsFixture('nodupe', JSON.stringify({
+    permissions: { allow: ['Bash(git:*)', 'Edit(**)', 'Write(**)'] },
+  }));
+  applySettings({ file, permissions: PROJECT_PERMISSIONS });
+  const allow = JSON.parse(readFileSync(file, 'utf8')).permissions.allow;
+  for (const p of ['Bash(git:*)', 'Edit(**)', 'Write(**)']) {
+    eq(allow.filter((x) => x === p).length, 1, `occurrences of ${p}`);
+  }
+});
+
+check('is idempotent -- a second run writes nothing', () => {
+  const file = settingsFixture('idem', null);
+  applySettings({ file, permissions: PROJECT_PERMISSIONS });
+  const second = applySettings({ file, permissions: PROJECT_PERMISSIONS });
+  eq(second.changed, false, 'changed');
+  eq(second.wrote, false, 'wrote');
+  eq(second.missingPermissions, [], 'missing');
+});
+
+check('refuses to overwrite malformed JSON', () => {
+  const file = settingsFixture('broken', '{ "permissions": { oops }');
+  let threw = null;
+  try {
+    applySettings({ file, permissions: PROJECT_PERMISSIONS });
+  } catch (err) {
+    threw = err;
+  }
+  ok(threw, 'should have thrown');
+  ok(/not valid JSON/.test(threw.message), `message mentions the cause: ${threw?.message}`);
+  eq(readFileSync(file, 'utf8'), '{ "permissions": { oops }', 'file left untouched');
+});
+
+check('refuses a JSON file that is not an object', () => {
+  const file = settingsFixture('array', '["nope"]');
+  let threw = null;
+  try {
+    applySettings({ file, permissions: PROJECT_PERMISSIONS });
+  } catch (err) { threw = err; }
+  ok(threw && /does not contain a JSON object/.test(threw.message), 'rejected');
+  eq(readFileSync(file, 'utf8'), '["nope"]', 'file untouched');
+});
+
+check('treats an empty file as empty settings rather than an error', () => {
+  const file = settingsFixture('empty', '   \n');
+  const res = applySettings({ file, permissions: GLOBAL_PERMISSIONS });
+  eq(res.wrote, true, 'wrote');
+  eq(JSON.parse(readFileSync(file, 'utf8')).permissions.allow, GLOBAL_PERMISSIONS, 'allow');
+});
+
+check('backs up an existing file before writing', () => {
+  const file = settingsFixture('backup', JSON.stringify({ permissions: { allow: ['Bash(docker:*)'] } }));
+  const res = applySettings({ file, permissions: PROJECT_PERMISSIONS });
+  ok(res.backup, 'backup path returned');
+  ok(existsSync(res.backup), 'backup exists on disk');
+  const restored = JSON.parse(readFileSync(res.backup, 'utf8'));
+  eq(restored.permissions.allow, ['Bash(docker:*)'], 'backup holds the pre-write content');
+});
+
+check('dry-run reports the plan and touches nothing', () => {
+  const before = JSON.stringify({ permissions: { allow: [] } });
+  const file = settingsFixture('dry', before);
+  const res = applySettings({ file, permissions: PROJECT_PERMISSIONS, dryRun: true });
+  eq(res.wrote, false, 'wrote');
+  ok(res.missingPermissions.length > 0, 'still reports what it would add');
+  eq(readFileSync(file, 'utf8'), before, 'file unchanged');
+});
+
+check('global scope stays read-only and confined to ~/.claude', () => {
+  for (const p of GLOBAL_PERMISSIONS) {
+    ok(p.startsWith('Read('), `global grant should be read-only, got ${p}`);
+    ok(p.includes('.claude'), `global grant should be confined to ~/.claude, got ${p}`);
+  }
+  const writey = GLOBAL_PERMISSIONS.filter((p) => /^(Edit|Write|Bash)\(/.test(p));
+  eq(writey, [], 'no write or bash grants in the global scope');
+});
+
+check('renderPlan lists every addition and says nothing is removed', () => {
+  const plan = planMerge({ permissions: { allow: ['Bash(git:*)'] } }, {
+    permissions: ['Bash(git:*)', 'Bash(gh:*)'], directories: ['/x/.claude'],
+  });
+  const lines = renderPlan('/tmp/settings.json', plan).join('\n');
+  ok(lines.includes('Bash(gh:*)'), 'lists the new permission');
+  ok(!lines.includes('+ permissions.allow: Bash(git:*)'), 'does not list one already present');
+  ok(/removed, reordered, or rewritten/.test(lines), 'states what it will not do');
+});
+
+check('renderPlan says so when there is nothing to do', () => {
+  const plan = planMerge({ permissions: { allow: ['Bash(git:*)'] } }, { permissions: ['Bash(git:*)'] });
+  ok(renderPlan('/tmp/s.json', plan).join(' ').includes('nothing to add'), 'reports no-op');
+});
+
+check('uncoveredCommands maps commands to the pattern they need', () => {
+  const res = uncoveredCommands(['npm run lint', './gradlew test', 'mvn test', 'git status'], ['Bash(git:*)']);
+  eq(res.map((r) => r.pattern), ['Bash(npm:*)', 'Bash(./gradlew:*)', 'Bash(mvn:*)'], 'patterns');
+});
+
+check('uncoveredCommands ignores blanks and dedupes', () => {
+  const res = uncoveredCommands(['npm run lint', 'npm test', '', '   ', null], []);
+  eq(res.map((r) => r.pattern), ['Bash(npm:*)'], 'deduped to one npm pattern');
+});
+
+console.log('\nConfig parsing and writing');
+
+const TEMPLATE = readFileSync(new URL('../../templates/config.md', import.meta.url), 'utf8');
+
+check('parses every section of the shipped template', () => {
+  const c = parseConfig(TEMPLATE);
+  for (const key of ['project','branch_naming','ticket_system','code_review','linter','build_test','pr_template','knowledge','changelog','git']) {
+    ok(c[key] && typeof c[key] === 'object', `section ${key} parsed`);
+  }
+  eq(c.project.base_branch, 'main', 'base_branch');
+  eq(c.git.commit_format, '[{ticket}] - {description}', 'commit_format keeps its braces');
+});
+
+check('coerces booleans, numbers and empty strings', () => {
+  const b = parseBlock('a: true\nb: false\nc: 42\nd: ""\ne: "x"\n');
+  eq(b, { a: true, b: false, c: 42, d: '', e: 'x' }, 'scalars');
+});
+
+check('parses inline flow sequences', () => {
+  const b = parseBlock('labels:\n  bug: ["bug", "defect"]\n  none: []\n');
+  eq(b.labels.bug, ['bug', 'defect'], 'inline array');
+  eq(b.labels.none, [], 'empty inline array');
+});
+
+check('keeps an explicit empty map as a map, not a list', () => {
+  const b = parseBlock('path_labels: {}\nchecklist:\n');
+  eq(b.path_labels, {}, 'explicit {} stays a map');
+  eq(b.checklist, [], 'bare key with nothing under it becomes a list');
+});
+
+check('parses dash lists under a key', () => {
+  const b = parseBlock('refs:\n  - "a.md"\n  - "b.md"\n');
+  eq(b.refs, ['a.md', 'b.md'], 'list');
+});
+
+check('does not treat a # inside a quoted value as a comment', () => {
+  const b = parseBlock('fmt: "[{ticket}] #{n}"   # trailing note\n');
+  eq(b.fmt, '[{ticket}] #{n}', 'value');
+});
+
+check('ignores comment-only and blank lines', () => {
+  const b = parseBlock('# header\n\nkey: "v"\n#  other: "x"\n');
+  eq(b, { key: 'v' }, 'only real keys');
+});
+
+check('setValue preserves the inline comment', () => {
+  const res = setValue(TEMPLATE, 'Project', 'base_branch', 'develop');
+  ok(res.applied, 'applied');
+  const line = res.text.split('\n').find((l) => l.trim().startsWith('base_branch:'));
+  ok(line.includes('"develop"'), `new value written: ${line}`);
+  ok(line.includes('# branch PRs target'), `comment kept: ${line}`);
+});
+
+check('setValue writes booleans unquoted', () => {
+  const res = setValue(TEMPLATE, 'Knowledge base', 'graphify_enabled', true);
+  const line = res.text.split('\n').find((l) => l.trim().startsWith('graphify_enabled:'));
+  ok(/graphify_enabled:\s+true\s+#/.test(line), `unquoted boolean: ${line}`);
+});
+
+check('setValue reports a missing key instead of corrupting the file', () => {
+  const res = setValue(TEMPLATE, 'Project', 'does_not_exist', 'x');
+  eq(res.applied, false, 'applied');
+  eq(res.text, TEMPLATE, 'markdown untouched');
+  ok(/not found/.test(res.reason), 'reason given');
+});
+
+check('setValue reports a missing section', () => {
+  const res = setValue(TEMPLATE, 'No Such Section', 'k', 'v');
+  eq(res.applied, false, 'applied');
+  ok(/section .* not found/.test(res.reason), 'reason mentions the section');
+});
+
+check('detected values round-trip through the template', () => {
+  const detected = {
+    name: 'acme', language: 'Java (Maven)', linterCommand: 'mvn checkstyle:check',
+    linterFixCommand: '', testCommand: 'mvn test', testType: 'local',
+    versionSource: 'pom.xml', prTemplate: '.github/pull_request_template.md',
+  };
+  const edits = editsFromDetection({
+    detected, projectName: 'Acme API', baseBranch: 'develop',
+    provider: 'jira', baseUrl: 'https://acme.atlassian.net', graphifyEnabled: false,
+  });
+  const res = applyEdits(TEMPLATE, edits);
+  eq(res.missed, [], 'every edit found its key');
+  const c = parseConfig(res.text);
+  eq(c.project.name, 'Acme API', 'name');
+  eq(c.project.base_branch, 'develop', 'base_branch');
+  eq(c.ticket_system.provider, 'jira', 'provider');
+  eq(c.linter.command, 'mvn checkstyle:check', 'linter');
+  eq(c.build_test.test_command, 'mvn test', 'test command');
+  eq(c.changelog.version_source, 'pom.xml', 'version source');
+});
+
+check('applyEdits skips empty values rather than blanking the template', () => {
+  const res = applyEdits(TEMPLATE, [
+    { section: 'Project', key: 'base_branch', value: '' },
+    { section: 'Project', key: 'name', value: undefined },
+  ]);
+  eq(res.applied, [], 'nothing applied');
+  eq(parseConfig(res.text).project.base_branch, 'main', 'template default survives');
+});
+
+check('a section edited twice keeps both values', () => {
+  let text = setValue(TEMPLATE, 'Build & test', 'test_command', 'pytest').text;
+  text = setValue(text, 'Build & test', 'test_type', 'local').text;
+  const c = parseConfig(text);
+  eq(c.build_test.test_command, 'pytest', 'first edit');
+  eq(c.build_test.test_type, 'local', 'second edit');
+});
+
+check('REGRESSION: a value containing $-patterns does not corrupt the file', () => {
+  // `$&`, `$\``, `$'` and `$1` are substitution patterns in a String.replace
+  // replacement STRING. The shipped template contains a style_checks example
+  // ending in `$'`, so a string replacement expanded it into "everything after
+  // the match" and silently duplicated or dropped chunks of the file.
+  const before = parseConfig(TEMPLATE);
+  const weird = "weird $& $` $' $1 name";
+  const res = setValue(TEMPLATE, 'Project', 'name', weird);
+  ok(res.applied, 'applied');
+
+  const after = parseConfig(res.text);
+  eq(after.project.name, weird, 'value written verbatim');
+  for (const key of Object.keys(before)) {
+    if (key === 'project') continue;
+    eq(after[key], before[key], `section ${key} unchanged`);
+  }
+  // Structural integrity: same number of sections, same number of fences.
+  eq(
+    (res.text.match(/^## /gm) || []).length,
+    (TEMPLATE.match(/^## /gm) || []).length,
+    'section count',
+  );
+  eq(
+    (res.text.match(/^```/gm) || []).length,
+    (TEMPLATE.match(/^```/gm) || []).length,
+    'code fence count',
+  );
+});
+
+check('REGRESSION: every $-bearing template line survives an unrelated edit', () => {
+  // Derive the marker from the template instead of re-escaping it by hand.
+  const dollarLines = TEMPLATE.split('\n').filter((l) => l.includes('$'));
+  ok(dollarLines.length > 0, 'template really does contain $ characters to protect');
+
+  const res = setValue(TEMPLATE, 'Build & test', 'test_command', 'mvn test');
+  for (const line of dollarLines) {
+    ok(res.text.includes(line), `line preserved verbatim: ${JSON.stringify(line.trim())}`);
+  }
+  eq(parseConfig(res.text).build_test.test_command, 'mvn test', 'edit still applied');
+});
+
+console.log('\nCredential files');
+
+check('parses env files with and without export', () => {
+  eq(parseEnvFile('export A="1"\nB=2\n# c\n\njunk\n'), { A: '1', B: '2' }, 'parsed');
+});
+
+check('renders a sourceable file and escapes dangerous characters', () => {
+  const text = renderEnvFile('jira', { JIRA_API_TOKEN: 'a"b$c`d' });
+  ok(text.includes('export JIRA_API_TOKEN='), 'export form');
+  ok(text.includes('\\"'), 'quote escaped');
+  ok(text.includes('\\$'), 'dollar escaped');
+  ok(text.includes('\\`'), 'backtick escaped');
+});
+
+check('env file round-trips a token with shell metacharacters', () => {
+  const token = 'tok-with-$VAR-and-`cmd`-and-"quote"';
+  const rendered = renderEnvFile('linear', { LINEAR_API_KEY: token });
+  // What bash would see after unescaping inside double quotes.
+  const value = rendered.match(/export LINEAR_API_KEY="(.*)"/)[1];
+  eq(value.replace(/\\([$`"\\])/g, '$1'), token, 'token survives escaping');
+});
+
+check('github-issues needs no credential file', () => {
+  eq(PROVIDERS['github-issues'].vars, [], 'no vars');
+  eq(PROVIDERS['github-issues'].secretVars, [], 'no secrets to handle');
+});
+
+check('every provider secret is listed as a secret var', () => {
+  for (const [name, spec] of Object.entries(PROVIDERS)) {
+    for (const v of spec.vars) {
+      if (/TOKEN|KEY|SECRET|PASSWORD/i.test(v)) {
+        ok(spec.secretVars.includes(v), `${name}.${v} must be marked secret`);
+      }
+    }
+  }
 });
 
 console.log('');
