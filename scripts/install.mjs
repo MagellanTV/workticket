@@ -21,6 +21,9 @@ import * as graphify from './lib/graphify.mjs';
 // in the npm package; the skill directory holds only what Claude Code reads.
 const SKILL_CONTENT = ['SKILL.md', 'README.md', 'setup', 'phases', 'agents', 'integrations', 'templates'];
 
+/** Provider assumed when nothing else is specified. See resolveProvider(). */
+const DEFAULT_PROVIDER = 'jira';
+
 export async function run({ flags = {} } = {}) {
   const dryRun = Boolean(flags['dry-run']);
   const assumeYes = Boolean(flags.yes || flags.y);
@@ -206,14 +209,17 @@ async function resolveProvider(flags, assumeYes) {
     if (p === 'none' || PROVIDERS[p]) return p;
     throw new Error(`Unknown provider "${flags.provider}". Use jira, github-issues or none.`);
   }
-  if (assumeYes) return 'none';
+  // Jira is the default: it is what the workflow is built around, and the only
+  // provider needing a credential file, so defaulting elsewhere just means the
+  // credential step silently never runs.
+  if (assumeYes) return DEFAULT_PROVIDER;
   const labels = { jira: 'Jira', 'github-issues': 'GitHub Issues', none: 'None / paste manually' };
   const picked = await choose(
     'Which ticket system does your team use?',
     Object.values(labels),
-    labels.none,
+    labels[DEFAULT_PROVIDER],
   );
-  return Object.keys(labels).find((k) => labels[k] === picked) ?? 'none';
+  return Object.keys(labels).find((k) => labels[k] === picked) ?? DEFAULT_PROVIDER;
 }
 
 /**

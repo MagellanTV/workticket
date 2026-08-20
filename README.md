@@ -8,7 +8,7 @@ A Claude Code skill that automates the full development cycle: from reading a ti
 - **Git** configured with user name and email
 - **GitHub CLI** (`gh`) authenticated
 - **Node 18+** — only to run the installer; the workflow itself never uses it
-- Ticket system: Jira or GitHub Issues (optional)
+- Ticket system: Jira (default) or GitHub Issues — optional, you can paste tickets manually
 
 ## Installation
 
@@ -21,7 +21,7 @@ you never need to be inside the skill folder. It installs the skill into
 `~/.claude/skills/workticket/`, registers it in `~/.claude/CLAUDE.md`, and adds a read-only
 `~/.claude` grant to your global Claude Code settings.
 
-If you use Jira it also asks for your API token, in the console, with the input hidden,
+Jira is the default provider, so it also asks for your API token, in the console, with the input hidden,
 and writes it to `~/.claude/.{provider}-env` at mode 600 — then verifies it against the API before
 saving. The token is never echoed, never logged, and never passed as a command-line argument where
 it would reach your shell history. Nothing is added to your shell rc: an `export JIRA_API_TOKEN=`

@@ -82,10 +82,18 @@ function splitFlow(body) {
   return parts.map((p) => p.trim()).filter(Boolean);
 }
 
-/** Pull the fenced yaml blocks out of the markdown, keyed by section heading. */
+/**
+ * Pull the fenced yaml blocks out of the markdown, keyed by section heading.
+ *
+ * Prose is allowed between a heading and its fence -- sections carry
+ * explanatory text, and requiring the fence to sit immediately under the
+ * heading made a one-line doc addition silently drop the whole section. The
+ * `(?!^## )` guard stops a section without a fence from swallowing the next
+ * section's block.
+ */
 export function extractBlocks(markdown) {
   const blocks = {};
-  const re = /^##\s+(.+?)\s*$\n+```ya?ml\n([\s\S]*?)^```/gm;
+  const re = /^##\s+(.+?)\s*$(?:(?!^##\s)[\s\S])*?^```ya?ml\n([\s\S]*?)^```/gm;
   let m;
   while ((m = re.exec(markdown)) !== null) blocks[m[1].trim()] = m[2];
   return blocks;
@@ -188,7 +196,11 @@ const yamlScalar = (value) => {
  * is absent, so a template that drifted cannot silently lose a value.
  */
 export function setValue(markdown, sectionHeading, key, value) {
-  const re = new RegExp(`(^##\\s+${escapeRe(sectionHeading)}\\s*$\\n+\`\`\`ya?ml\\n)([\\s\\S]*?)(^\`\`\`)`, 'm');
+  // Same tolerance as extractBlocks: prose may sit between heading and fence.
+  const re = new RegExp(
+    `(^##\\s+${escapeRe(sectionHeading)}\\s*$(?:(?!^##\\s)[\\s\\S])*?^\`\`\`ya?ml\\n)([\\s\\S]*?)(^\`\`\`)`,
+    'm',
+  );
   const match = markdown.match(re);
   if (!match) return { text: markdown, applied: false, reason: `section "${sectionHeading}" not found` };
 

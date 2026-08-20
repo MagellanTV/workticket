@@ -31,8 +31,11 @@ username_format: "kebab-case"   # camelCase | kebab-case | as-is
 
 ## Ticket system
 
+Defaults to Jira. Set `provider: ""` to skip ticket integration entirely and paste
+tickets manually.
+
 ```yaml
-provider: ""                    # jira | github-issues
+provider: "jira"                # jira | github-issues
 base_url: ""                    # e.g. https://mycompany.atlassian.net (Jira only)
 auth_method: "api-token"        # api-token | browser | manual
 env_vars:

@@ -13,8 +13,8 @@ import {
   readSettings, planMerge, applySettings, renderPlan, backupSettings,
   uncoveredCommands, GLOBAL_PERMISSIONS, PROJECT_PERMISSIONS,
 } from '../lib/settings.mjs';
-import { parseConfig, parseBlock, setValue, applyEdits, editsFromDetection } from '../lib/config.mjs';
-import { parseEnvFile, renderEnvFile, PROVIDERS } from '../lib/keys.mjs';
+import { parseConfig, parseBlock, setValue, applyEdits, editsFromDetection, extractBlocks } from '../lib/config.mjs';
+import { parseEnvFile, renderEnvFile, PROVIDERS, inspectCredentials } from '../lib/keys.mjs';
 import { InputClosedError, ask, confirm, choose, askSecret } from '../lib/ui.mjs';
 import * as graphify from '../lib/graphify.mjs';
 
@@ -598,6 +598,41 @@ await check('REGRESSION: every $-bearing template line survives an unrelated edi
   eq(parseConfig(res.text).build_test.test_command, 'mvn test', 'edit still applied');
 });
 
+await check('REGRESSION: prose between a heading and its fence does not drop the section', () => {
+  // Adding one explanatory line under `## Ticket system` made extractBlocks miss
+  // the whole section, so parseConfig returned undefined for it and every edit
+  // to it silently missed. Sections must tolerate prose.
+  const md = [
+    '## Project',
+    '',
+    'Some explanation of what this section is for.',
+    '',
+    '```yaml',
+    'name: "x"',
+    '```',
+    '',
+    '## Other',
+    '',
+    '```yaml',
+    'flag: true',
+    '```',
+    '',
+  ].join('\n');
+  const blocks = extractBlocks(md);
+  eq(Object.keys(blocks).sort(), ['Other', 'Project'], 'both sections found');
+  eq(parseBlock(blocks.Project), { name: 'x' }, 'prose-preceded block parsed');
+  const res = setValue(md, 'Project', 'name', 'y');
+  ok(res.applied, 'setValue reaches a prose-preceded block');
+  eq(parseConfig(res.text).project.name, 'y', 'edit landed');
+});
+
+await check('a section with no yaml fence does not swallow the next section', () => {
+  const md = ['## Empty', '', 'Just prose, no config here.', '', '## Real', '', '```yaml', 'k: 1', '```', ''].join('\n');
+  const blocks = extractBlocks(md);
+  ok(!('Empty' in blocks), 'fence-less section produces no block');
+  eq(parseBlock(blocks.Real), { k: 1 }, 'the next section keeps its own block');
+});
+
 console.log('\nCredential files');
 
 await check('parses env files with and without export', () => {
@@ -672,6 +707,29 @@ await check('no provider declares a Linear variable', () => {
   for (const [name, spec] of Object.entries(PROVIDERS)) {
     for (const v of [...spec.vars, ...spec.secretVars]) {
       ok(!/LINEAR/i.test(v), `${name} still references ${v}`);
+    }
+  }
+});
+
+await check('jira is the default provider in the shipped template', () => {
+  eq(parseConfig(TEMPLATE).ticket_system.provider, 'jira', 'template default');
+});
+
+await check('the default provider is one that actually exists', () => {
+  // Guards against the default drifting to a provider that was removed, which
+  // would make every fresh config fail its own ticket-system check.
+  eq(Object.keys(PROVIDERS).includes('jira'), true, 'jira is a known provider');
+});
+
+await check('inspectCredentials never exposes a secret value', () => {
+  // The base URL and email are reused to prefill prompts; the token must only
+  // ever be reported as a boolean.
+  for (const [name, spec] of Object.entries(PROVIDERS)) {
+    const info = inspectCredentials(name);
+    if (!info.known) continue;
+    for (const secret of spec.secretVars) {
+      ok(!(secret in (info.values ?? {})), `${name}: ${secret} must not appear in .values`);
+      ok(typeof info.vars?.[secret]?.set === 'boolean', `${name}: ${secret} reported as a boolean`);
     }
   }
 });

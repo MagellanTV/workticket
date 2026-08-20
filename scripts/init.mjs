@@ -19,6 +19,10 @@ import { applySettings, renderPlan, PROJECT_PERMISSIONS, uncoveredCommands, read
 import { applyEdits, editsFromDetection, parseConfig, readConfig } from './lib/config.mjs';
 import { claudeDir } from './lib/paths.mjs';
 import * as graphify from './lib/graphify.mjs';
+import { inspectCredentials } from './lib/keys.mjs';
+
+/** Provider assumed when nothing else is specified. */
+const DEFAULT_PROVIDER = 'jira';
 
 const TEMPLATES = {
   'config.md': 'config.md',
@@ -269,8 +273,8 @@ async function gatherAnswers({ repoRoot, detected, assumeYes, dryRun }) {
   const defaults = {
     projectName: detected.name || basename(repoRoot),
     baseBranch: 'main',
-    provider: '',
-    baseUrl: '',
+    provider: DEFAULT_PROVIDER,
+    baseUrl: credentialBaseUrl(DEFAULT_PROVIDER),
     // Enable it when the CLI is actually present; the analyze phase prefers a
     // real graph over grep, and a config flag pointing at a missing binary is
     // just a failing check.
@@ -283,11 +287,13 @@ async function gatherAnswers({ repoRoot, detected, assumeYes, dryRun }) {
   const baseBranch = await ask('Base branch PRs target:', await guessBaseBranch(repoRoot));
 
   const labels = { jira: 'Jira', 'github-issues': 'GitHub Issues', '': 'None / paste manually' };
-  const picked = await choose('Ticket system:', Object.values(labels), labels['']);
-  const provider = Object.keys(labels).find((k) => labels[k] === picked) ?? '';
+  const picked = await choose('Ticket system:', Object.values(labels), labels[DEFAULT_PROVIDER]);
+  const provider = Object.keys(labels).find((k) => labels[k] === picked) ?? DEFAULT_PROVIDER;
 
   let baseUrl = '';
-  if (provider === 'jira') baseUrl = await ask('Jira base URL:', '');
+  // Reuse the URL already in the credential file rather than asking twice. This
+  // reads only the non-secret values -- inspectCredentials never returns a token.
+  if (provider === 'jira') baseUrl = await ask('Jira base URL:', credentialBaseUrl('jira'));
 
   const skills = installedSkills(join(claudeDir(), 'skills'));
   if (skills.length) info(dim(`Installed skills you could use for review: ${skills.join(', ')}`));
@@ -312,6 +318,15 @@ async function guessBaseBranch(repoRoot) {
     }
   }
   return 'main';
+}
+
+/** The base URL already configured for a provider, if any. Never a secret. */
+function credentialBaseUrl(provider) {
+  try {
+    return inspectCredentials(provider).values?.JIRA_BASE_URL ?? '';
+  } catch {
+    return '';
+  }
 }
 
 function basename(p) {

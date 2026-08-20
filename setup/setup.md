@@ -111,7 +111,8 @@ Show: pattern, type_mapping, username_format.
 
 ### 3.3 Ticket system
 Show: provider, base_url, auth_method, env_vars.
-Ask which provider (jira / github-issues).
+Ask which provider (jira / github-issues). Jira is the default; an empty value means
+tickets get pasted manually.
 
 ### 3.4 Code review skill
 Show: skill_name, skill_path, review_references.
@@ -239,7 +240,8 @@ start. The workflow sources ~/.claude/.jira-env directly.
 
 **If provider is "github-issues":** Already covered by Check 3.
 
-**If provider is empty:** Report "Ticket system not configured".
+**If provider is empty:** Report "Ticket system not configured — tickets pasted manually".
+An empty provider is a deliberate choice, not a misconfiguration, so this is a WARN not an ERR.
 
 ### Check 5: Linter
 
