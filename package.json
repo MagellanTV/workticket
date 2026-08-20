@@ -31,11 +31,11 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/softjuanm/workticket.git"
+    "url": "git+https://github.com/MagellanTV/workticket.git"
   },
-  "homepage": "https://github.com/softjuanm/workticket#readme",
+  "homepage": "https://github.com/MagellanTV/workticket#readme",
   "bugs": {
-    "url": "https://github.com/softjuanm/workticket/issues"
+    "url": "https://github.com/MagellanTV/workticket/issues"
   },
   "author": "Juan Manuel",
   "license": "MIT",

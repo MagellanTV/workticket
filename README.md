@@ -303,7 +303,7 @@ If anything is missing, both `setup` and `doctor` name the exact command that fi
 ## Development
 
 ```bash
-git clone https://github.com/softjuanm/workticket.git
+git clone https://github.com/MagellanTV/workticket.git
 cd workticket
 npm test          # 61 tests, no dependencies, builds real git fixtures
 npm pack          # inspect exactly what would be published
