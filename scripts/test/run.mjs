@@ -15,13 +15,14 @@ import {
 } from '../lib/settings.mjs';
 import { parseConfig, parseBlock, setValue, applyEdits, editsFromDetection } from '../lib/config.mjs';
 import { parseEnvFile, renderEnvFile, PROVIDERS } from '../lib/keys.mjs';
+import { InputClosedError, ask, confirm, choose, askSecret } from '../lib/ui.mjs';
 
 let passed = 0;
 const failures = [];
 
-function check(name, fn) {
+async function check(name, fn) {
   try {
-    fn();
+    await fn();
     passed++;
     console.log(`  ok   ${name}`);
   } catch (err) {
@@ -95,27 +96,27 @@ const noAlfred = (dir) => {
 
 console.log('\nGitignore planning');
 
-check('adds all entries to an empty .gitignore', () => {
+await check('adds all entries to an empty .gitignore', () => {
   const p = planGitignore('');
   eq(p.missing.length, 4, 'missing count');
   ok(p.next.includes('# workticket workflow data'), 'workticket header present');
   ok(p.next.includes('graphify-out/'), 'graphify entry present');
 });
 
-check('is idempotent -- second pass changes nothing', () => {
+await check('is idempotent -- second pass changes nothing', () => {
   const first = planGitignore('');
   const second = planGitignore(first.next);
   eq(second.changed, false, 'changed');
   eq(second.missing, [], 'missing');
 });
 
-check('preserves unrelated user entries', () => {
+await check('preserves unrelated user entries', () => {
   const p = planGitignore('node_modules/\ndist/\n');
   ok(p.next.startsWith('node_modules/\ndist/\n'), 'user entries kept at top');
   ok(p.next.includes('.claude/workticket/plans/'), 'new entry appended');
 });
 
-check('rewrites legacy alfred-code lines in place, no duplicates', () => {
+await check('rewrites legacy alfred-code lines in place, no duplicates', () => {
   const legacy = '# alfred-code workflow data\n.claude/alfred-code/plans/\n.claude/alfred-code/history/\n.claude/alfred-code/review/\n\n# graphify output\ngraphify-out/\n';
   const p = planGitignore(legacy);
   ok(!p.next.includes('alfred-code'), 'no alfred-code left');
@@ -124,7 +125,7 @@ check('rewrites legacy alfred-code lines in place, no duplicates', () => {
   eq((p.next.match(/# workticket workflow data/g) || []).length, 1, 'header count');
 });
 
-check('does not duplicate a header that already exists', () => {
+await check('does not duplicate a header that already exists', () => {
   const partial = '# workticket workflow data\n.claude/workticket/plans/\n';
   const p = planGitignore(partial);
   eq((p.next.match(/# workticket workflow data/g) || []).length, 1, 'header count');
@@ -133,7 +134,7 @@ check('does not duplicate a header that already exists', () => {
 
 console.log('\nLegacy migration');
 
-check('CASE A: tracked legacy dir migrates via git mv, history preserved', () => {
+await check('CASE A: tracked legacy dir migrates via git mv, history preserved', () => {
   const dir = fixture('a', {
     track: true,
     gitignore: '# alfred-code workflow data\n.claude/alfred-code/plans/\n',
@@ -156,7 +157,7 @@ check('CASE A: tracked legacy dir migrates via git mv, history preserved', () =>
   ok(cfg.startsWith('# Workticket'), `config header rewritten, got: ${cfg.split('\n')[0]}`);
 });
 
-check('CASE B: untracked legacy dir migrates via plain rename', () => {
+await check('CASE B: untracked legacy dir migrates via plain rename', () => {
   const dir = fixture('b', { track: false, gitignore: 'node_modules/\n' });
   const res = migrateLegacy(dir);
   eq(res.method, 'mv', 'method');
@@ -165,7 +166,7 @@ check('CASE B: untracked legacy dir migrates via plain rename', () => {
   eq(noAlfred(dir), [], 'no alfred references');
 });
 
-check('CASE C: no .gitignore at all', () => {
+await check('CASE C: no .gitignore at all', () => {
   const dir = fixture('c', { track: false, gitignore: null });
   migrateLegacy(dir);
   const res = applyGitignore(dir);
@@ -173,7 +174,7 @@ check('CASE C: no .gitignore at all', () => {
   ok(readFileSync(join(dir, '.gitignore'), 'utf8').includes('graphify-out/'), 'entries written');
 });
 
-check('CASE D: nothing to migrate is a no-op', () => {
+await check('CASE D: nothing to migrate is a no-op', () => {
   const dir = fixture('d', { track: false });
   rmSync(join(dir, '.claude', 'alfred-code'), { recursive: true });
   mkdirSync(join(dir, '.claude', 'workticket'), { recursive: true });
@@ -182,7 +183,7 @@ check('CASE D: nothing to migrate is a no-op', () => {
   eq(res.moved, false, 'moved');
 });
 
-check('CASE E: both dirs present is a conflict, never auto-merged', () => {
+await check('CASE E: both dirs present is a conflict, never auto-merged', () => {
   const dir = fixture('e', { track: false });
   mkdirSync(join(dir, '.claude', 'workticket'), { recursive: true });
   writeFileSync(join(dir, '.claude', 'workticket', 'config.md'), '# Workticket\nnew\n');
@@ -193,7 +194,7 @@ check('CASE E: both dirs present is a conflict, never auto-merged', () => {
   ok(res.legacyFiles.length > 0 && res.currentFiles.length > 0, 'both sides listed for the developer');
 });
 
-check('dry-run touches nothing but reports the method', () => {
+await check('dry-run touches nothing but reports the method', () => {
   const dir = fixture('f', { track: true, gitignore: '.claude/alfred-code/plans/\n' });
   const res = migrateLegacy(dir, { dryRun: true });
   eq(res.moved, false, 'moved');
@@ -204,7 +205,7 @@ check('dry-run touches nothing but reports the method', () => {
   ok(readFileSync(join(dir, '.gitignore'), 'utf8').includes('alfred-code'), 'file unchanged on disk');
 });
 
-check('binary files are left alone during rewrite', () => {
+await check('binary files are left alone during rewrite', () => {
   const dir = fixture('g', { track: false });
   const bin = join(dir, '.claude', 'alfred-code', 'blob.bin');
   const payload = Buffer.from([0x00, 0x01, 0x61, 0x6c, 0x66, 0x72, 0x65, 0x64, 0x2d, 0x63, 0x6f, 0x64, 0x65, 0x00]);
@@ -216,7 +217,7 @@ check('binary files are left alone during rewrite', () => {
 
 console.log('\nProject detection');
 
-check('detects a Maven project', () => {
+await check('detects a Maven project', () => {
   const dir = join(root, 'det-maven');
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, 'pom.xml'), '<project/>');
@@ -226,7 +227,7 @@ check('detects a Maven project', () => {
   eq(d.versionSource, 'pom.xml', 'version source');
 });
 
-check('detects Gradle with wrapper and prefers ./gradlew', () => {
+await check('detects Gradle with wrapper and prefers ./gradlew', () => {
   const dir = join(root, 'det-gradle');
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, 'build.gradle.kts'), '');
@@ -237,7 +238,7 @@ check('detects Gradle with wrapper and prefers ./gradlew', () => {
   eq(d.versionSource, 'build.gradle.kts', 'version source');
 });
 
-check('detects Roku by manifest plus components', () => {
+await check('detects Roku by manifest plus components', () => {
   const dir = join(root, 'det-roku');
   mkdirSync(join(dir, 'components'), { recursive: true });
   writeFileSync(join(dir, 'manifest'), 'title=App');
@@ -246,7 +247,7 @@ check('detects Roku by manifest plus components', () => {
   eq(d.testType, 'device', 'test type');
 });
 
-check('leaves commands empty rather than inventing them', () => {
+await check('leaves commands empty rather than inventing them', () => {
   const dir = join(root, 'det-node-bare');
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'bare' }));
@@ -255,7 +256,7 @@ check('leaves commands empty rather than inventing them', () => {
   eq(d.testCommand, '', 'test');
 });
 
-check('survives a malformed package.json', () => {
+await check('survives a malformed package.json', () => {
   const dir = join(root, 'det-broken');
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, 'package.json'), '{ not json');
@@ -264,7 +265,7 @@ check('survives a malformed package.json', () => {
   eq(d.name, '', 'no name extracted');
 });
 
-check('finds a PR template', () => {
+await check('finds a PR template', () => {
   const dir = join(root, 'det-pr');
   mkdirSync(join(dir, '.github'), { recursive: true });
   writeFileSync(join(dir, 'package.json'), '{}');
@@ -272,7 +273,7 @@ check('finds a PR template', () => {
   eq(detectProject(dir).prTemplate, '.github/pull_request_template.md', 'template path');
 });
 
-check('unknown stack degrades gracefully', () => {
+await check('unknown stack degrades gracefully', () => {
   const dir = join(root, 'det-unknown');
   mkdirSync(dir, { recursive: true });
   const d = detectProject(dir);
@@ -282,19 +283,19 @@ check('unknown stack degrades gracefully', () => {
 
 console.log('\nPaths');
 
-check('tildify never leaks the home path', () => {
+await check('tildify never leaks the home path', () => {
   ok(!tildify(join(process.env.HOME, '.claude')).includes(process.env.HOME), 'home replaced');
   eq(tildify('/tmp/x'), '/tmp/x', 'non-home path untouched');
 });
 
-check('findRepoRoot locates the enclosing repo', () => {
+await check('findRepoRoot locates the enclosing repo', () => {
   const dir = fixture('rr', { track: false });
   const nested = join(dir, 'a', 'b');
   mkdirSync(nested, { recursive: true });
   eq(findRepoRoot(nested), dir, 'root');
 });
 
-check('dataCounts ignores READMEs', () => {
+await check('dataCounts ignores READMEs', () => {
   const dir = fixture('dc', { track: false });
   migrateLegacy(dir);
   const counts = dataCounts(join(dir, '.claude', 'workticket'));
@@ -311,7 +312,7 @@ const settingsFixture = (name, content) => {
   return file;
 };
 
-check('creates a settings file that does not exist yet', () => {
+await check('creates a settings file that does not exist yet', () => {
   const file = settingsFixture('fresh', null);
   const res = applySettings({ file, permissions: GLOBAL_PERMISSIONS, directories: ['/home/x/.claude'] });
   eq(res.existed, false, 'existed');
@@ -322,7 +323,7 @@ check('creates a settings file that does not exist yet', () => {
   eq(data.permissions.additionalDirectories, ['/home/x/.claude'], 'dirs');
 });
 
-check('preserves unrelated top-level keys', () => {
+await check('preserves unrelated top-level keys', () => {
   const file = settingsFixture('unrelated', JSON.stringify({
     theme: 'dark', effortLevel: 'high', hooks: { PreToolUse: [{ matcher: 'Bash' }] },
     permissions: { allow: ['Bash(docker:*)'], defaultMode: 'acceptEdits' },
@@ -335,7 +336,7 @@ check('preserves unrelated top-level keys', () => {
   eq(data.permissions.defaultMode, 'acceptEdits', 'defaultMode');
 });
 
-check('never removes or reorders what the user already had', () => {
+await check('never removes or reorders what the user already had', () => {
   const existing = ['Bash(docker:*)', 'Bash(kubectl:*)', 'Bash(git:*)'];
   const file = settingsFixture('preserve', JSON.stringify({ permissions: { allow: existing } }));
   applySettings({ file, permissions: PROJECT_PERMISSIONS });
@@ -343,7 +344,7 @@ check('never removes or reorders what the user already had', () => {
   eq(after.slice(0, 3), existing, 'original entries kept in original order at the front');
 });
 
-check('never duplicates an entry the user already had', () => {
+await check('never duplicates an entry the user already had', () => {
   const file = settingsFixture('nodupe', JSON.stringify({
     permissions: { allow: ['Bash(git:*)', 'Edit(**)', 'Write(**)'] },
   }));
@@ -354,7 +355,7 @@ check('never duplicates an entry the user already had', () => {
   }
 });
 
-check('is idempotent -- a second run writes nothing', () => {
+await check('is idempotent -- a second run writes nothing', () => {
   const file = settingsFixture('idem', null);
   applySettings({ file, permissions: PROJECT_PERMISSIONS });
   const second = applySettings({ file, permissions: PROJECT_PERMISSIONS });
@@ -363,7 +364,7 @@ check('is idempotent -- a second run writes nothing', () => {
   eq(second.missingPermissions, [], 'missing');
 });
 
-check('refuses to overwrite malformed JSON', () => {
+await check('refuses to overwrite malformed JSON', () => {
   const file = settingsFixture('broken', '{ "permissions": { oops }');
   let threw = null;
   try {
@@ -376,7 +377,7 @@ check('refuses to overwrite malformed JSON', () => {
   eq(readFileSync(file, 'utf8'), '{ "permissions": { oops }', 'file left untouched');
 });
 
-check('refuses a JSON file that is not an object', () => {
+await check('refuses a JSON file that is not an object', () => {
   const file = settingsFixture('array', '["nope"]');
   let threw = null;
   try {
@@ -386,14 +387,14 @@ check('refuses a JSON file that is not an object', () => {
   eq(readFileSync(file, 'utf8'), '["nope"]', 'file untouched');
 });
 
-check('treats an empty file as empty settings rather than an error', () => {
+await check('treats an empty file as empty settings rather than an error', () => {
   const file = settingsFixture('empty', '   \n');
   const res = applySettings({ file, permissions: GLOBAL_PERMISSIONS });
   eq(res.wrote, true, 'wrote');
   eq(JSON.parse(readFileSync(file, 'utf8')).permissions.allow, GLOBAL_PERMISSIONS, 'allow');
 });
 
-check('backs up an existing file before writing', () => {
+await check('backs up an existing file before writing', () => {
   const file = settingsFixture('backup', JSON.stringify({ permissions: { allow: ['Bash(docker:*)'] } }));
   const res = applySettings({ file, permissions: PROJECT_PERMISSIONS });
   ok(res.backup, 'backup path returned');
@@ -402,7 +403,7 @@ check('backs up an existing file before writing', () => {
   eq(restored.permissions.allow, ['Bash(docker:*)'], 'backup holds the pre-write content');
 });
 
-check('dry-run reports the plan and touches nothing', () => {
+await check('dry-run reports the plan and touches nothing', () => {
   const before = JSON.stringify({ permissions: { allow: [] } });
   const file = settingsFixture('dry', before);
   const res = applySettings({ file, permissions: PROJECT_PERMISSIONS, dryRun: true });
@@ -411,7 +412,7 @@ check('dry-run reports the plan and touches nothing', () => {
   eq(readFileSync(file, 'utf8'), before, 'file unchanged');
 });
 
-check('global scope stays read-only and confined to ~/.claude', () => {
+await check('global scope stays read-only and confined to ~/.claude', () => {
   for (const p of GLOBAL_PERMISSIONS) {
     ok(p.startsWith('Read('), `global grant should be read-only, got ${p}`);
     ok(p.includes('.claude'), `global grant should be confined to ~/.claude, got ${p}`);
@@ -420,7 +421,7 @@ check('global scope stays read-only and confined to ~/.claude', () => {
   eq(writey, [], 'no write or bash grants in the global scope');
 });
 
-check('renderPlan lists every addition and says nothing is removed', () => {
+await check('renderPlan lists every addition and says nothing is removed', () => {
   const plan = planMerge({ permissions: { allow: ['Bash(git:*)'] } }, {
     permissions: ['Bash(git:*)', 'Bash(gh:*)'], directories: ['/x/.claude'],
   });
@@ -430,17 +431,17 @@ check('renderPlan lists every addition and says nothing is removed', () => {
   ok(/removed, reordered, or rewritten/.test(lines), 'states what it will not do');
 });
 
-check('renderPlan says so when there is nothing to do', () => {
+await check('renderPlan says so when there is nothing to do', () => {
   const plan = planMerge({ permissions: { allow: ['Bash(git:*)'] } }, { permissions: ['Bash(git:*)'] });
   ok(renderPlan('/tmp/s.json', plan).join(' ').includes('nothing to add'), 'reports no-op');
 });
 
-check('uncoveredCommands maps commands to the pattern they need', () => {
+await check('uncoveredCommands maps commands to the pattern they need', () => {
   const res = uncoveredCommands(['npm run lint', './gradlew test', 'mvn test', 'git status'], ['Bash(git:*)']);
   eq(res.map((r) => r.pattern), ['Bash(npm:*)', 'Bash(./gradlew:*)', 'Bash(mvn:*)'], 'patterns');
 });
 
-check('uncoveredCommands ignores blanks and dedupes', () => {
+await check('uncoveredCommands ignores blanks and dedupes', () => {
   const res = uncoveredCommands(['npm run lint', 'npm test', '', '   ', null], []);
   eq(res.map((r) => r.pattern), ['Bash(npm:*)'], 'deduped to one npm pattern');
 });
@@ -449,7 +450,7 @@ console.log('\nConfig parsing and writing');
 
 const TEMPLATE = readFileSync(new URL('../../templates/config.md', import.meta.url), 'utf8');
 
-check('parses every section of the shipped template', () => {
+await check('parses every section of the shipped template', () => {
   const c = parseConfig(TEMPLATE);
   for (const key of ['project','branch_naming','ticket_system','code_review','linter','build_test','pr_template','knowledge','changelog','git']) {
     ok(c[key] && typeof c[key] === 'object', `section ${key} parsed`);
@@ -458,39 +459,39 @@ check('parses every section of the shipped template', () => {
   eq(c.git.commit_format, '[{ticket}] - {description}', 'commit_format keeps its braces');
 });
 
-check('coerces booleans, numbers and empty strings', () => {
+await check('coerces booleans, numbers and empty strings', () => {
   const b = parseBlock('a: true\nb: false\nc: 42\nd: ""\ne: "x"\n');
   eq(b, { a: true, b: false, c: 42, d: '', e: 'x' }, 'scalars');
 });
 
-check('parses inline flow sequences', () => {
+await check('parses inline flow sequences', () => {
   const b = parseBlock('labels:\n  bug: ["bug", "defect"]\n  none: []\n');
   eq(b.labels.bug, ['bug', 'defect'], 'inline array');
   eq(b.labels.none, [], 'empty inline array');
 });
 
-check('keeps an explicit empty map as a map, not a list', () => {
+await check('keeps an explicit empty map as a map, not a list', () => {
   const b = parseBlock('path_labels: {}\nchecklist:\n');
   eq(b.path_labels, {}, 'explicit {} stays a map');
   eq(b.checklist, [], 'bare key with nothing under it becomes a list');
 });
 
-check('parses dash lists under a key', () => {
+await check('parses dash lists under a key', () => {
   const b = parseBlock('refs:\n  - "a.md"\n  - "b.md"\n');
   eq(b.refs, ['a.md', 'b.md'], 'list');
 });
 
-check('does not treat a # inside a quoted value as a comment', () => {
+await check('does not treat a # inside a quoted value as a comment', () => {
   const b = parseBlock('fmt: "[{ticket}] #{n}"   # trailing note\n');
   eq(b.fmt, '[{ticket}] #{n}', 'value');
 });
 
-check('ignores comment-only and blank lines', () => {
+await check('ignores comment-only and blank lines', () => {
   const b = parseBlock('# header\n\nkey: "v"\n#  other: "x"\n');
   eq(b, { key: 'v' }, 'only real keys');
 });
 
-check('setValue preserves the inline comment', () => {
+await check('setValue preserves the inline comment', () => {
   const res = setValue(TEMPLATE, 'Project', 'base_branch', 'develop');
   ok(res.applied, 'applied');
   const line = res.text.split('\n').find((l) => l.trim().startsWith('base_branch:'));
@@ -498,26 +499,26 @@ check('setValue preserves the inline comment', () => {
   ok(line.includes('# branch PRs target'), `comment kept: ${line}`);
 });
 
-check('setValue writes booleans unquoted', () => {
+await check('setValue writes booleans unquoted', () => {
   const res = setValue(TEMPLATE, 'Knowledge base', 'graphify_enabled', true);
   const line = res.text.split('\n').find((l) => l.trim().startsWith('graphify_enabled:'));
   ok(/graphify_enabled:\s+true\s+#/.test(line), `unquoted boolean: ${line}`);
 });
 
-check('setValue reports a missing key instead of corrupting the file', () => {
+await check('setValue reports a missing key instead of corrupting the file', () => {
   const res = setValue(TEMPLATE, 'Project', 'does_not_exist', 'x');
   eq(res.applied, false, 'applied');
   eq(res.text, TEMPLATE, 'markdown untouched');
   ok(/not found/.test(res.reason), 'reason given');
 });
 
-check('setValue reports a missing section', () => {
+await check('setValue reports a missing section', () => {
   const res = setValue(TEMPLATE, 'No Such Section', 'k', 'v');
   eq(res.applied, false, 'applied');
   ok(/section .* not found/.test(res.reason), 'reason mentions the section');
 });
 
-check('detected values round-trip through the template', () => {
+await check('detected values round-trip through the template', () => {
   const detected = {
     name: 'acme', language: 'Java (Maven)', linterCommand: 'mvn checkstyle:check',
     linterFixCommand: '', testCommand: 'mvn test', testType: 'local',
@@ -538,7 +539,7 @@ check('detected values round-trip through the template', () => {
   eq(c.changelog.version_source, 'pom.xml', 'version source');
 });
 
-check('applyEdits skips empty values rather than blanking the template', () => {
+await check('applyEdits skips empty values rather than blanking the template', () => {
   const res = applyEdits(TEMPLATE, [
     { section: 'Project', key: 'base_branch', value: '' },
     { section: 'Project', key: 'name', value: undefined },
@@ -547,7 +548,7 @@ check('applyEdits skips empty values rather than blanking the template', () => {
   eq(parseConfig(res.text).project.base_branch, 'main', 'template default survives');
 });
 
-check('a section edited twice keeps both values', () => {
+await check('a section edited twice keeps both values', () => {
   let text = setValue(TEMPLATE, 'Build & test', 'test_command', 'pytest').text;
   text = setValue(text, 'Build & test', 'test_type', 'local').text;
   const c = parseConfig(text);
@@ -555,7 +556,7 @@ check('a section edited twice keeps both values', () => {
   eq(c.build_test.test_type, 'local', 'second edit');
 });
 
-check('REGRESSION: a value containing $-patterns does not corrupt the file', () => {
+await check('REGRESSION: a value containing $-patterns does not corrupt the file', () => {
   // `$&`, `$\``, `$'` and `$1` are substitution patterns in a String.replace
   // replacement STRING. The shipped template contains a style_checks example
   // ending in `$'`, so a string replacement expanded it into "everything after
@@ -584,7 +585,7 @@ check('REGRESSION: a value containing $-patterns does not corrupt the file', () 
   );
 });
 
-check('REGRESSION: every $-bearing template line survives an unrelated edit', () => {
+await check('REGRESSION: every $-bearing template line survives an unrelated edit', () => {
   // Derive the marker from the template instead of re-escaping it by hand.
   const dollarLines = TEMPLATE.split('\n').filter((l) => l.includes('$'));
   ok(dollarLines.length > 0, 'template really does contain $ characters to protect');
@@ -598,11 +599,11 @@ check('REGRESSION: every $-bearing template line survives an unrelated edit', ()
 
 console.log('\nCredential files');
 
-check('parses env files with and without export', () => {
+await check('parses env files with and without export', () => {
   eq(parseEnvFile('export A="1"\nB=2\n# c\n\njunk\n'), { A: '1', B: '2' }, 'parsed');
 });
 
-check('renders a sourceable file and escapes dangerous characters', () => {
+await check('renders a sourceable file and escapes dangerous characters', () => {
   const text = renderEnvFile('jira', { JIRA_API_TOKEN: 'a"b$c`d' });
   ok(text.includes('export JIRA_API_TOKEN='), 'export form');
   ok(text.includes('\\"'), 'quote escaped');
@@ -610,7 +611,7 @@ check('renders a sourceable file and escapes dangerous characters', () => {
   ok(text.includes('\\`'), 'backtick escaped');
 });
 
-check('env file round-trips a token with shell metacharacters', () => {
+await check('env file round-trips a token with shell metacharacters', () => {
   const token = 'tok-with-$VAR-and-`cmd`-and-"quote"';
   const rendered = renderEnvFile('linear', { LINEAR_API_KEY: token });
   // What bash would see after unescaping inside double quotes.
@@ -618,12 +619,12 @@ check('env file round-trips a token with shell metacharacters', () => {
   eq(value.replace(/\\([$`"\\])/g, '$1'), token, 'token survives escaping');
 });
 
-check('github-issues needs no credential file', () => {
+await check('github-issues needs no credential file', () => {
   eq(PROVIDERS['github-issues'].vars, [], 'no vars');
   eq(PROVIDERS['github-issues'].secretVars, [], 'no secrets to handle');
 });
 
-check('every provider secret is listed as a secret var', () => {
+await check('every provider secret is listed as a secret var', () => {
   for (const [name, spec] of Object.entries(PROVIDERS)) {
     for (const v of spec.vars) {
       if (/TOKEN|KEY|SECRET|PASSWORD/i.test(v)) {
@@ -631,6 +632,32 @@ check('every provider secret is listed as a secret var', () => {
       }
     }
   }
+});
+
+console.log('\nNon-interactive behaviour');
+
+await check('InputClosedError carries a stable code the CLI can branch on', () => {
+  const err = new InputClosedError();
+  eq(err.code, 'INPUT_CLOSED', 'code');
+  eq(err.name, 'InputClosedError', 'name');
+  ok(err instanceof Error, 'is an Error');
+  ok(/stdin closed/.test(err.message), 'message explains the cause');
+});
+
+await check('prompts fall back instead of hanging when stdin is not a TTY', async () => {
+  // The suite runs with piped stdin, so isTTY is false here -- exactly the
+  // condition a CI run or a Bash-tool invocation produces.
+  ok(!process.stdin.isTTY, 'precondition: this suite runs without a TTY');
+  eq(await ask('anything?', 'fallback'), 'fallback', 'ask returns its fallback');
+  eq(await confirm('ok?', false), false, 'confirm returns its fallback');
+  eq(await choose('pick', ['a', 'b'], 'b'), 'b', 'choose returns its fallback');
+  eq(await askSecret('token?'), '', 'askSecret yields nothing rather than blocking');
+});
+
+await check('askSecret never returns a value it could not have read', async () => {
+  // Guards against a future refactor that makes the non-TTY path echo or
+  // fabricate a secret. Empty is the only safe answer.
+  eq(await askSecret('token?'), '', 'empty');
 });
 
 console.log('');

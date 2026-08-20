@@ -16,10 +16,22 @@ A Claude Code skill that automates the full development cycle: from reading a ti
 npx workticket install
 ```
 
-Run it once per machine. It installs the skill into `~/.claude/skills/workticket/`, registers it
-in `~/.claude/CLAUDE.md`, adds a read-only `~/.claude` grant to your global Claude Code settings,
-and — if you use Jira or Linear — prompts for an API token with the input hidden and writes it to
-`~/.claude/.{provider}-env` at mode 600.
+Run it once per machine, **from any directory** — `npx` fetches the package from the registry, so
+you never need to be inside the skill folder. It installs the skill into
+`~/.claude/skills/workticket/`, registers it in `~/.claude/CLAUDE.md`, and adds a read-only
+`~/.claude` grant to your global Claude Code settings.
+
+If you use Jira or Linear it also asks for your API token, in the console, with the input hidden,
+and writes it to `~/.claude/.{provider}-env` at mode 600 — then verifies it against the API before
+saving. The token is never echoed, never logged, and never passed as a command-line argument where
+it would reach your shell history. Nothing is added to your shell rc: an `export JIRA_API_TOKEN=`
+in `.zshrc` would leak the token into every process you start.
+
+To set up or change credentials later without touching anything else:
+
+```bash
+npx workticket install --provider=jira
+```
 
 Then once per project:
 
@@ -34,7 +46,9 @@ migrates a legacy `.claude/alfred-code/` directory if it finds one, and scopes t
 permissions to that repo.
 
 Both commands are idempotent — re-running them reports "already present" and writes nothing. Add
-`--dry-run` to see every change without making it, or `--yes` for non-interactive use.
+`--dry-run` to see every change without making it, or `--yes` for non-interactive use. Run with
+stdin closed or redirected and they fall back to defaults rather than hanging; back out of a
+prompt with Ctrl+D and nothing is written.
 
 To check a setup without changing anything:
 
@@ -285,6 +299,29 @@ for the split and the reasoning.
 | Repo | `.claude/settings.local.json` | your project's own binaries, e.g. `Bash(mvn:*)`, `Bash(./gradlew:*)` |
 
 If anything is missing, both `setup` and `doctor` name the exact command that fixes it.
+
+## Development
+
+```bash
+git clone https://github.com/softjuanm/workticket.git
+cd workticket
+npm test          # 61 tests, no dependencies, builds real git fixtures
+npm pack          # inspect exactly what would be published
+```
+
+The installer has no runtime dependencies: Node 18+ already provides
+`readline/promises`, global `fetch` and `fs`. There is no build step — the source that ships is
+the source that runs. `npm publish` runs the suite first, so a failing build cannot go out.
+
+| Path | What it is |
+|---|---|
+| `bin/workticket.mjs` | CLI entry and command router |
+| `scripts/install.mjs` | machine-level setup |
+| `scripts/init.mjs` | project-level setup |
+| `scripts/doctor.mjs` | checks only, never writes |
+| `scripts/lib/` | settings merge, credentials, detection, config read/write, checks |
+| `scripts/test/run.mjs` | the suite (not published) |
+| `SKILL.md`, `phases/`, `agents/` | the skill Claude Code reads |
 
 ## Quick Reference
 

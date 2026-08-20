@@ -13,27 +13,42 @@
     "setup": "node bin/workticket.mjs install",
     "init": "node bin/workticket.mjs init",
     "doctor": "node bin/workticket.mjs doctor",
-    "test": "node scripts/test/run.mjs"
+    "test": "node scripts/test/run.mjs",
+    "prepublishOnly": "node scripts/test/run.mjs"
   },
   "files": [
     "bin/",
-    "scripts/",
+    "scripts/*.mjs",
+    "scripts/lib/",
     "SKILL.md",
     "README.md",
+    "LICENSE",
     "setup/",
     "phases/",
     "agents/",
     "integrations/",
     "templates/"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/softjuanm/workticket.git"
+  },
+  "homepage": "https://github.com/softjuanm/workticket#readme",
+  "bugs": {
+    "url": "https://github.com/softjuanm/workticket/issues"
+  },
+  "author": "Juan Manuel",
+  "license": "MIT",
   "keywords": [
     "claude",
     "claude-code",
+    "claude-skill",
     "skill",
     "workflow",
+    "developer-tools",
     "jira",
     "linear",
-    "pull-request"
-  ],
-  "license": "MIT"
+    "pull-request",
+    "code-review"
+  ]
 }

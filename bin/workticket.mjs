@@ -4,7 +4,7 @@
 // developer setting up a tool, not someone debugging this package.
 
 import { parseArgs, HELP } from '../scripts/lib/args.mjs';
-import { closePrompts, fail, dim } from '../scripts/lib/ui.mjs';
+import { closePrompts, fail, dim, warn } from '../scripts/lib/ui.mjs';
 
 const COMMANDS = {
   install: () => import('../scripts/install.mjs'),
@@ -41,6 +41,14 @@ try {
 } catch (err) {
   closePrompts();
   console.log('');
+  // A closed stdin is a normal way to back out, not a failure of ours: say so
+  // plainly and skip the stack-trace hint, which only adds noise here.
+  if (err?.code === 'INPUT_CLOSED') {
+    warn(err.message);
+    console.log(dim('  Nothing was written. Re-run when you can answer the prompts,'));
+    console.log(dim('  or pass --yes to accept the defaults non-interactively.'));
+    process.exit(1);
+  }
   fail(err.message || String(err));
   if (process.env.WORKTICKET_DEBUG) console.error(dim(err.stack ?? ''));
   else console.log(dim('  Set WORKTICKET_DEBUG=1 for the full stack trace.'));

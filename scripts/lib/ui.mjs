@@ -55,8 +55,32 @@ export function table(headers, rows) {
   rows.forEach((r) => console.log(line(r)));
 }
 
+/**
+ * Raised when stdin closes while we are waiting for an answer -- Ctrl+D, or the
+ * command run with stdin redirected. Callers treat it as "no input, wrote
+ * nothing" rather than an internal failure, so the CLI can report it in one
+ * clean line instead of readline's own message plus a stack-trace hint.
+ */
+export class InputClosedError extends Error {
+  constructor(message = 'No input received -- stdin closed before the question was answered.') {
+    super(message);
+    this.name = 'InputClosedError';
+    this.code = 'INPUT_CLOSED';
+  }
+}
+
 let rl = null;
 const getRl = () => (rl ??= createInterface({ input: stdin, output: stdout }));
+
+/** readline rejects on EOF; turn that into our own typed error. */
+async function question(prompt) {
+  try {
+    return await getRl().question(prompt);
+  } catch {
+    closePrompts();
+    throw new InputClosedError();
+  }
+}
 
 export function closePrompts() {
   rl?.close();
@@ -64,19 +88,19 @@ export function closePrompts() {
 }
 
 /** Free-text question. Returns fallback when the answer is empty. */
-export async function ask(question, fallback = '') {
+export async function ask(q, fallback = '') {
   if (!stdin.isTTY) return fallback;
   const suffix = fallback ? ` ${dim(`[${fallback}]`)}` : '';
-  const answer = (await getRl().question(`  ${question}${suffix} `)).trim();
+  const answer = (await question(`  ${q}${suffix} `)).trim();
   return answer || fallback;
 }
 
 /** Yes/no question. */
-export async function confirm(question, fallback = true) {
+export async function confirm(q, fallback = true) {
   if (!stdin.isTTY) return fallback;
   const hint = fallback ? 'Y/n' : 'y/N';
   for (;;) {
-    const a = (await getRl().question(`  ${question} ${dim(`[${hint}]`)} `)).trim().toLowerCase();
+    const a = (await question(`  ${q} ${dim(`[${hint}]`)} `)).trim().toLowerCase();
     if (!a) return fallback;
     if (['y', 'yes'].includes(a)) return true;
     if (['n', 'no'].includes(a)) return false;
@@ -85,12 +109,12 @@ export async function confirm(question, fallback = true) {
 }
 
 /** Pick one of a list. Returns the chosen value, or fallback non-interactively. */
-export async function choose(question, options, fallback = null) {
+export async function choose(q, options, fallback = null) {
   if (!stdin.isTTY || options.length === 0) return fallback;
-  console.log(`  ${question}`);
+  console.log(`  ${q}`);
   options.forEach((o, i) => console.log(`    ${bold(String(i + 1))}) ${o}`));
   for (;;) {
-    const a = (await getRl().question(`  ${dim(`1-${options.length}`)} `)).trim();
+    const a = (await question(`  ${dim(`1-${options.length}`)} `)).trim();
     if (!a && fallback !== null) return fallback;
     const n = Number(a);
     if (Number.isInteger(n) && n >= 1 && n <= options.length) return options[n - 1];
@@ -106,21 +130,28 @@ const BACKSPACE = '\x7f';
  * terminal into the file we write -- it is never printed, logged, or passed
  * as a command-line argument where it could land in shell history or ps output.
  */
-export async function askSecret(question) {
+export async function askSecret(q) {
   if (!stdin.isTTY) return '';
   closePrompts();
-  return new Promise((resolve) => {
-    stdout.write(`  ${question} `);
+  return new Promise((resolve, reject) => {
+    stdout.write(`  ${q} `);
     const wasRaw = Boolean(stdin.isRaw);
     stdin.setRawMode?.(true);
     stdin.resume();
     let value = '';
     const done = (result) => {
       stdin.removeListener('data', onData);
+      stdin.removeListener('end', onEnd);
       stdin.setRawMode?.(wasRaw);
       stdin.pause();
       stdout.write('\n');
       resolve(result);
+    };
+    const onEnd = () => {
+      stdin.removeListener('data', onData);
+      stdin.setRawMode?.(wasRaw);
+      stdout.write('\n');
+      reject(new InputClosedError());
     };
     const onData = (chunk) => {
       for (const ch of chunk.toString('utf8')) {
@@ -142,5 +173,6 @@ export async function askSecret(question) {
       }
     };
     stdin.on('data', onData);
+    stdin.once('end', onEnd);
   });
 }
