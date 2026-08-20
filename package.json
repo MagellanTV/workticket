@@ -1,0 +1,39 @@
+{
+  "name": "workticket",
+  "version": "1.0.0",
+  "description": "Claude Code skill that drives the full development cycle from ticket to draft PR, with a zero-dependency installer.",
+  "type": "module",
+  "bin": {
+    "workticket": "bin/workticket.mjs"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "setup": "node bin/workticket.mjs install",
+    "init": "node bin/workticket.mjs init",
+    "doctor": "node bin/workticket.mjs doctor",
+    "test": "node scripts/test/run.mjs"
+  },
+  "files": [
+    "bin/",
+    "scripts/",
+    "SKILL.md",
+    "README.md",
+    "setup/",
+    "phases/",
+    "agents/",
+    "integrations/",
+    "templates/"
+  ],
+  "keywords": [
+    "claude",
+    "claude-code",
+    "skill",
+    "workflow",
+    "jira",
+    "linear",
+    "pull-request"
+  ],
+  "license": "MIT"
+}
