@@ -25,13 +25,6 @@ export const PROVIDERS = {
       { name: 'JIRA_API_TOKEN', question: 'Jira API token (input hidden):', secret: true },
     ],
   },
-  linear: {
-    label: 'Linear',
-    vars: ['LINEAR_API_KEY'],
-    secretVars: ['LINEAR_API_KEY'],
-    tokenUrl: 'https://linear.app/settings/api',
-    prompts: [{ name: 'LINEAR_API_KEY', question: 'Linear API key (input hidden):', secret: true }],
-  },
   'github-issues': {
     label: 'GitHub Issues',
     vars: [],
@@ -165,26 +158,6 @@ export async function verifyCredentials(provider, values, { timeoutMs = 10000 } 
         signal,
       });
       return { ok: res.status === 200, status: res.status, detail: describeHttp(res.status) };
-    }
-
-    if (provider === 'linear') {
-      const { LINEAR_API_KEY } = values;
-      if (!LINEAR_API_KEY) return { ok: false, status: null, detail: 'credentials incomplete' };
-      const res = await fetch('https://api.linear.app/graphql', {
-        method: 'POST',
-        headers: { Authorization: LINEAR_API_KEY, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: '{ viewer { id } }' }),
-        signal,
-      });
-      if (res.status !== 200) return { ok: false, status: res.status, detail: describeHttp(res.status) };
-      // Linear answers 200 with an errors array for a bad key.
-      const body = await res.json().catch(() => null);
-      const bad = Array.isArray(body?.errors) && body.errors.length > 0;
-      return {
-        ok: !bad && Boolean(body?.data?.viewer?.id),
-        status: 200,
-        detail: bad ? 'API key rejected' : 'authenticated',
-      };
     }
 
     return { ok: true, status: null, detail: 'no credential file needed' };

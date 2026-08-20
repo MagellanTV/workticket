@@ -8,7 +8,7 @@ A Claude Code skill that automates the full development cycle: from reading a ti
 - **Git** configured with user name and email
 - **GitHub CLI** (`gh`) authenticated
 - **Node 18+** — only to run the installer; the workflow itself never uses it
-- Ticket system: Jira, Linear, or GitHub Issues (optional)
+- Ticket system: Jira or GitHub Issues (optional)
 
 ## Installation
 
@@ -21,7 +21,7 @@ you never need to be inside the skill folder. It installs the skill into
 `~/.claude/skills/workticket/`, registers it in `~/.claude/CLAUDE.md`, and adds a read-only
 `~/.claude` grant to your global Claude Code settings.
 
-If you use Jira or Linear it also asks for your API token, in the console, with the input hidden,
+If you use Jira it also asks for your API token, in the console, with the input hidden,
 and writes it to `~/.claude/.{provider}-env` at mode 600 — then verifies it against the API before
 saving. The token is never echoed, never logged, and never passed as a command-line argument where
 it would reach your shell history. Nothing is added to your shell rc: an `export JIRA_API_TOKEN=`
@@ -49,6 +49,21 @@ Both commands are idempotent — re-running them reports "already present" and w
 `--dry-run` to see every change without making it, or `--yes` for non-interactive use. Run with
 stdin closed or redirected and they fall back to defaults rather than hanging; back out of a
 prompt with Ctrl+D and nothing is written.
+
+`install` also checks for [graphify](https://pypi.org/project/graphifyy/), the optional
+knowledge-graph backend the analyze phase prefers over grep. If it is missing, it offers to
+install it with whichever of `uv`, `pipx` or `pip3` you already have — defaulting to **no**, since
+that pulls a package from PyPI. You can always do it yourself:
+
+```bash
+uv tool install graphifyy
+```
+
+Note the package is `graphifyy`, with two y's. `graphify` and `graphify-cli` do not exist on PyPI.
+
+`init` then enables it in the project config when the CLI is present, and offers to build the
+graph. Neither step is required: without graphify the workflow falls back to grep, so `doctor`
+reports it as a warning, never an error.
 
 To check a setup without changing anything:
 
@@ -158,7 +173,7 @@ The workflow is split into 4 stages:
 | Phase | Name | What it does |
 |-------|------|--------------|
 | 01 | Preflight | Verifies git, base branch, project config |
-| 02 | Read Ticket | Reads the ticket from the configured system (Jira, Linear, GitHub Issues) |
+| 02 | Read Ticket | Reads the ticket from the configured system (Jira, GitHub Issues) |
 | 03 | Present + Review | Presents the ticket to the developer, asks questions if anything is ambiguous |
 
 ### Plan (phases 4-6)
@@ -229,7 +244,6 @@ When everything scores HIGH (typo, config, string change), the workflow compress
 │   └── retro-agent.md                 # Retrospective agent (phase 12)
 ├── integrations/
 │   ├── jira.md                        # Jira adapter
-│   ├── linear.md                      # Linear adapter
 │   └── github-issues.md              # GitHub Issues adapter
 └── templates/
     ├── config.md                      # Configuration template
@@ -272,14 +286,6 @@ Requires a `~/.claude/.jira-env` file with:
 export JIRA_BASE_URL="https://your-instance.atlassian.net"
 export JIRA_USER_EMAIL="your-email"
 export JIRA_API_TOKEN="your-api-token"
-```
-
-### Linear
-
-Requires a `~/.claude/.linear-env` file with:
-
-```bash
-export LINEAR_API_KEY="your-api-key"
 ```
 
 ### GitHub Issues

@@ -56,7 +56,6 @@ The skill separates **engine** (global, shared across projects) from **project d
 │   ├── 01-preflight.md ... 12-retro.md
 ├── integrations/                     <- ticket system adapters
 │   ├── jira.md
-│   ├── linear.md
 │   └── github-issues.md
 └── templates/                        <- bootstrap files for new projects
     ├── config.md                     <- config template

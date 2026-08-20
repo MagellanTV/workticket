@@ -6,7 +6,6 @@ Extract structured information from the ticket.
 
 Based on `{config.ticket_system.provider}`:
 - **jira**: See `integrations/jira.md` for the full curl command and ADF parsing
-- **linear**: See `integrations/linear.md` for GraphQL query
 - **github-issues**: `gh issue view {ISSUE-NUMBER} --json title,body,labels,assignees,milestone,state`
 
 ## Fields to extract
@@ -15,7 +14,7 @@ Based on `{config.ticket_system.provider}`:
 |---|---|---|
 | Title | Yes | |
 | Type | Yes | bug/feature/task/enhancement |
-| Description | Yes | Parse from ADF (Jira), Markdown (Linear/GH) |
+| Description | Yes | Parse from ADF (Jira), Markdown (GitHub Issues) |
 | Acceptance Criteria | Yes | Inside description, under "AC" heading or task lists |
 | Priority | No | |
 | Milestone / Fix Version | No | |

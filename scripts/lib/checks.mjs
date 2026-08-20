@@ -10,10 +10,12 @@ import { promisify } from 'node:util';
 import { skillInstallDir, settingsPath, tildify, claudeDir } from './paths.mjs';
 import { readSettings, GLOBAL_PERMISSIONS, PROJECT_PERMISSIONS, uncoveredCommands } from './settings.mjs';
 import { inspectCredentials, verifyCredentials, PROVIDERS, parseEnvFile } from './keys.mjs';
+import { inspect as graphifyInspect, installCommands as GRAPHIFY_INSTALL_FN } from './graphify.mjs';
 import { readFileSync } from 'node:fs';
 import { envFilePath } from './paths.mjs';
 
 const exec = promisify(execFile);
+const GRAPHIFY_INSTALL = GRAPHIFY_INSTALL_FN();
 
 const ok = (id, label, detail, fix = null) => ({ id, label, status: 'ok', detail, fix });
 const warn = (id, label, detail, fix = null) => ({ id, label, status: 'warn', detail, fix });
@@ -105,7 +107,7 @@ export async function checkTicketSystem(provider, { verify = true } = {}) {
   }
   const spec = PROVIDERS[provider];
   if (!spec) {
-    return err('tickets', 'Ticket system', `unknown provider "${provider}"`, 'Use jira, linear or github-issues');
+    return err('tickets', 'Ticket system', `unknown provider "${provider}"`, 'Use jira or github-issues');
   }
   if (!spec.vars.length) {
     return ok('tickets', `Ticket system (${spec.label})`, 'uses gh auth -- see the GitHub CLI row');
@@ -168,14 +170,21 @@ export async function checkReviewSkill(skillName, skillPath) {
 }
 
 export async function checkGraphify(cwd, enabled) {
-  const cli = await onPath('graphify');
+  const state = await graphifyInspect();
   const graph = existsSync(join(cwd, 'graphify-out', 'graph.json'));
   if (!enabled) {
-    return skip('graphify', 'Knowledge base', cli ? 'graphify installed but disabled in config' : 'not enabled (grep fallback)');
+    return skip(
+      'graphify',
+      'Knowledge base',
+      state.installed ? `graphify ${state.version ?? ''} installed but disabled in config`.replace('  ', ' ') : 'not enabled (grep fallback)',
+    );
   }
-  if (!cli) return warn('graphify', 'Knowledge base', 'graphify not installed', 'pip install graphify-cli');
-  if (!graph) return warn('graphify', 'Knowledge base', 'graph not built yet', 'graphify build');
-  return ok('graphify', 'Knowledge base', 'graph.json present');
+  // Optional feature: a missing graph or CLI degrades to grep, so warn not err.
+  if (!state.installed) {
+    return warn('graphify', 'Knowledge base', 'graphify not installed', `${GRAPHIFY_INSTALL[0]}   (or: npx workticket install)`);
+  }
+  if (!graph) return warn('graphify', 'Knowledge base', `graphify ${state.version ?? ''} ready, graph not built`.replace('  ', ' '), 'graphify build');
+  return ok('graphify', 'Knowledge base', `graph.json present (graphify ${state.version ?? '?'})`);
 }
 
 export function checkSkillInstalled() {

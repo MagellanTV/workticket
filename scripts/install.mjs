@@ -15,6 +15,7 @@ import { applySettings, renderPlan, GLOBAL_PERMISSIONS, GLOBAL_DIRECTORIES } fro
 import { applyRegistration } from './lib/claudemd.mjs';
 import { PROVIDERS, inspectCredentials, writeCredentials, verifyCredentials, claudeDirMode } from './lib/keys.mjs';
 import { checkGitHubCli } from './lib/checks.mjs';
+import * as graphify from './lib/graphify.mjs';
 
 // What actually makes up the skill. The installer's own bin/ and scripts/ stay
 // in the npm package; the skill directory holds only what Claude Code reads.
@@ -127,7 +128,11 @@ export async function run({ flags = {} } = {}) {
     }
   }
 
-  // ---- 5. Credential directory hygiene -----------------------------------
+  // ---- 5. Knowledge base (optional) --------------------------------------
+  step('Knowledge base (graphify)');
+  summary.push(['Knowledge base', await setupGraphify({ dryRun, assumeYes })]);
+
+  // ---- 6. Credential directory hygiene -----------------------------------
   const mode = claudeDirMode();
   if (mode && !['700', '750', '755'].includes(mode)) {
     warn(`${tildify(claudeDir())} is mode ${mode}. Credential files are 600, but consider chmod 700 on the directory.`);
@@ -148,14 +153,61 @@ export async function run({ flags = {} } = {}) {
   return 0;
 }
 
+/**
+ * graphify gives the analyze phase a real dependency graph instead of grep. It
+ * is optional -- the workflow degrades to grep without it -- so a missing CLI is
+ * reported, never treated as a failure, and nothing is installed unasked.
+ */
+async function setupGraphify({ dryRun, assumeYes }) {
+  const state = await graphify.inspect();
+
+  if (state.installed) {
+    good(`graphify ${state.version ?? '(version unknown)'} available${state.mcp ? ', with graphify-mcp' : ''}`);
+    return `graphify ${state.version ?? 'installed'}`;
+  }
+
+  const installer = await graphify.availableInstaller();
+  if (!installer) {
+    warn('graphify not installed, and no uv, pipx or pip3 on PATH to install it with.');
+    info(dim('Optional -- the workflow falls back to grep. To add it later, install one of'));
+    info(dim(`those, then: ${graphify.installCommands()[0]}`));
+    return 'not installed (no installer available)';
+  }
+
+  info(`graphify is not installed. It is optional — without it the analyze phase uses grep.`);
+  info(dim(`Would run: ${installer.label}`));
+
+  if (dryRun) {
+    planned(installer.label);
+    return 'would install';
+  }
+  // Default to no: this pulls a third-party package from PyPI, so it should be a
+  // deliberate yes rather than something a hurried --yes sweeps in.
+  const go = !assumeYes && (await confirm('Install it now?', false));
+  if (!go) {
+    skipped(`Skipped. Install later with: ${installer.label}`);
+    return 'skipped';
+  }
+
+  step(`Running ${installer.label}`);
+  const res = await graphify.install(installer);
+  if (res.ok) {
+    good(`graphify ${res.version ?? ''} installed`.trim());
+    return `installed ${res.version ?? ''}`.trim();
+  }
+  warn(`Install failed: ${res.error ?? 'unknown error'}`);
+  info(dim(`Try it by hand: ${installer.label}`));
+  return 'install failed';
+}
+
 async function resolveProvider(flags, assumeYes) {
   if (typeof flags.provider === 'string') {
     const p = flags.provider.toLowerCase();
     if (p === 'none' || PROVIDERS[p]) return p;
-    throw new Error(`Unknown provider "${flags.provider}". Use jira, linear, github-issues or none.`);
+    throw new Error(`Unknown provider "${flags.provider}". Use jira, github-issues or none.`);
   }
   if (assumeYes) return 'none';
-  const labels = { jira: 'Jira', linear: 'Linear', 'github-issues': 'GitHub Issues', none: 'None / paste manually' };
+  const labels = { jira: 'Jira', 'github-issues': 'GitHub Issues', none: 'None / paste manually' };
   const picked = await choose(
     'Which ticket system does your team use?',
     Object.values(labels),

@@ -18,6 +18,7 @@ import { applyGitignore, inspectLegacy, migrateLegacy, dataCounts } from './lib/
 import { applySettings, renderPlan, PROJECT_PERMISSIONS, uncoveredCommands, readSettings } from './lib/settings.mjs';
 import { applyEdits, editsFromDetection, parseConfig, readConfig } from './lib/config.mjs';
 import { claudeDir } from './lib/paths.mjs';
+import * as graphify from './lib/graphify.mjs';
 
 const TEMPLATES = {
   'config.md': 'config.md',
@@ -174,7 +175,31 @@ export async function run({ flags = {} } = {}) {
   }
   summary.push(['.gitignore', gi.changed ? (dryRun ? 'would update' : 'updated') : 'already correct']);
 
-  // ---- 5. Project permissions --------------------------------------------
+  // ---- 5. Knowledge graph (optional) -------------------------------------
+  const wantsGraph = Boolean(readConfig(configFile)?.knowledge?.graphify_enabled);
+  if (wantsGraph) {
+    step('Knowledge graph');
+    const state = await graphify.inspect();
+    if (!state.installed) {
+      warn('config enables graphify but the CLI is missing -- the analyze phase will fall back to grep.');
+      info(dim(`Install it with: npx workticket install`));
+    } else if (graphify.hasGraph(repoRoot)) {
+      skipped('graphify-out/graph.json already built.');
+    } else if (dryRun) {
+      planned('graphify build');
+    } else {
+      // Can take minutes on a large repo, so this is opt-in rather than implied.
+      const go = assumeYes ? false : await confirm('Build the graph now? (can take a few minutes)', false);
+      if (!go) skipped('Skipped. Run `graphify build` when you want it.');
+      else {
+        step('Running graphify build');
+        const res = await graphify.build(repoRoot);
+        res.ok ? good('graphify-out/graph.json built') : warn(`Build failed: ${res.error ?? 'unknown error'}`);
+      }
+    }
+  }
+
+  // ---- 6. Project permissions --------------------------------------------
   step('Project permissions');
   const settingsFile = join(repoRoot, '.claude', 'settings.local.json');
   const config = existsSync(configFile) ? readConfig(configFile) : null;
@@ -240,12 +265,16 @@ export async function run({ flags = {} } = {}) {
 
 /** The few things detection cannot decide. Falls back to safe defaults with --yes. */
 async function gatherAnswers({ repoRoot, detected, assumeYes, dryRun }) {
+  const graphifyReady = (await graphify.inspect()).installed;
   const defaults = {
     projectName: detected.name || basename(repoRoot),
     baseBranch: 'main',
     provider: '',
     baseUrl: '',
-    graphifyEnabled: false,
+    // Enable it when the CLI is actually present; the analyze phase prefers a
+    // real graph over grep, and a config flag pointing at a missing binary is
+    // just a failing check.
+    graphifyEnabled: graphifyReady,
   };
   if (assumeYes || dryRun || !process.stdin.isTTY) return defaults;
 
@@ -253,7 +282,7 @@ async function gatherAnswers({ repoRoot, detected, assumeYes, dryRun }) {
   const projectName = await ask('Project name:', defaults.projectName);
   const baseBranch = await ask('Base branch PRs target:', await guessBaseBranch(repoRoot));
 
-  const labels = { jira: 'Jira', linear: 'Linear', 'github-issues': 'GitHub Issues', '': 'None / paste manually' };
+  const labels = { jira: 'Jira', 'github-issues': 'GitHub Issues', '': 'None / paste manually' };
   const picked = await choose('Ticket system:', Object.values(labels), labels['']);
   const provider = Object.keys(labels).find((k) => labels[k] === picked) ?? '';
 
@@ -263,7 +292,7 @@ async function gatherAnswers({ repoRoot, detected, assumeYes, dryRun }) {
   const skills = installedSkills(join(claudeDir(), 'skills'));
   if (skills.length) info(dim(`Installed skills you could use for review: ${skills.join(', ')}`));
 
-  return { projectName, baseBranch, provider, baseUrl, graphifyEnabled: false };
+  return { projectName, baseBranch, provider, baseUrl, graphifyEnabled: defaults.graphifyEnabled };
 }
 
 async function guessBaseBranch(repoRoot) {

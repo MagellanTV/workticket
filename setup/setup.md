@@ -111,7 +111,7 @@ Show: pattern, type_mapping, username_format.
 
 ### 3.3 Ticket system
 Show: provider, base_url, auth_method, env_vars.
-Ask which provider (jira / linear / github-issues).
+Ask which provider (jira / github-issues).
 
 ### 3.4 Code review skill
 Show: skill_name, skill_path, review_references.
@@ -134,11 +134,14 @@ Show: template_path, checklist_auto_check, labels_mapping, path_labels.
 Show: graphify_enabled, graphify_rebuild, codebase_search, claude_md_path.
 
 If developer sets `graphify_enabled: true`:
-1. Check if graphify CLI is installed: `command -v graphify`
-2. If not installed: guide installation (pip install graphify-cli)
-3. After CLI is available, check if graph exists: `test -f graphify-out/graph.json`
-4. If graph missing, ask: "Want me to build the graphify graph now?"
-5. If yes, run: `graphify build` (or `/graphify` skill if available)
+1. Check if the graphify CLI is installed: `command -v graphify`
+2. If not installed, do not install it yourself — say: "Run `npx workticket install`, which
+   offers to install it with whichever of uv, pipx or pip3 you have." The package is
+   `graphifyy` on PyPI, not `graphify` or `graphify-cli`; neither of those exists.
+3. After the CLI is available, check for the graph: `test -f graphify-out/graph.json`
+4. If the graph is missing, ask: "Want me to build the graphify graph now?" It can take
+   minutes on a large repo, so wait for a yes.
+5. If yes, run: `graphify build` (or the `/graphify` skill if available)
 6. Ask what rebuild command to use and save it to config
 
 ### 3.9 Changelog
@@ -234,20 +237,6 @@ yourself — a token in the transcript is a leaked token. Do NOT suggest adding 
 ~/.zshrc either: an `export JIRA_API_TOKEN=...` there leaks the token into every process they
 start. The workflow sources ~/.claude/.jira-env directly.
 
-**If provider is "linear":**
-
-Source credentials and check in a single batched call. Note the `:+(set)` form — it reports
-whether the key exists without ever printing it:
-```bash
-source ~/.claude/.linear-env 2>/dev/null && echo "LINEAR_API_KEY=${LINEAR_API_KEY:+(set)}"
-```
-
-If it is missing: `npx workticket install --provider=linear`.
-If set, test connectivity:
-```bash
-source ~/.claude/.linear-env && curl -s -o /dev/null -w "%{http_code}" -X POST https://api.linear.app/graphql -H "Authorization: $LINEAR_API_KEY" -d '{"query": "{ viewer { id } }"}'
-```
-
 **If provider is "github-issues":** Already covered by Check 3.
 
 **If provider is empty:** Report "Ticket system not configured".
@@ -286,6 +275,10 @@ If skill_name is empty: Report "Code review skill: not configured (optional)".
 
 ### Check 8: Graphify
 
+Optional — without it the analyze phase falls back to grep, so a missing CLI is a WARN, never
+an ERR. The PyPI package is **`graphifyy`** (two y's) and it ships two binaries, `graphify` and
+`graphify-mcp`.
+
 No conditions. No skipping. Run commands 1 and 2 as a single batched call:
 
 ```bash
@@ -298,7 +291,9 @@ graphify build && test -f graphify-out/graph.json && echo "BUILD_SUCCESS" || ech
 ```
 
 **Dashboard mapping:**
-- CLI not found → ERR: "graphify not installed — run `pip install graphify-cli`"
+- CLI not found → WARN: "graphify not installed — run `npx workticket install`, or
+  `uv tool install graphifyy` directly". This is optional: the analyze phase falls back to
+  grep, so it is never an ERR.
 - CLI found + graph found → OK
 - CLI found + graph not found + build succeeded → OK (just built)
 - CLI found + graph not found + build failed → ERR: "graphify build failed"

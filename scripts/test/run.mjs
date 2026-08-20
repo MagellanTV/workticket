@@ -16,6 +16,7 @@ import {
 import { parseConfig, parseBlock, setValue, applyEdits, editsFromDetection } from '../lib/config.mjs';
 import { parseEnvFile, renderEnvFile, PROVIDERS } from '../lib/keys.mjs';
 import { InputClosedError, ask, confirm, choose, askSecret } from '../lib/ui.mjs';
+import * as graphify from '../lib/graphify.mjs';
 
 let passed = 0;
 const failures = [];
@@ -613,9 +614,9 @@ await check('renders a sourceable file and escapes dangerous characters', () => 
 
 await check('env file round-trips a token with shell metacharacters', () => {
   const token = 'tok-with-$VAR-and-`cmd`-and-"quote"';
-  const rendered = renderEnvFile('linear', { LINEAR_API_KEY: token });
+  const rendered = renderEnvFile('jira', { JIRA_API_TOKEN: token });
   // What bash would see after unescaping inside double quotes.
-  const value = rendered.match(/export LINEAR_API_KEY="(.*)"/)[1];
+  const value = rendered.match(/export JIRA_API_TOKEN="(.*)"/)[1];
   eq(value.replace(/\\([$`"\\])/g, '$1'), token, 'token survives escaping');
 });
 
@@ -658,6 +659,60 @@ await check('askSecret never returns a value it could not have read', async () =
   // Guards against a future refactor that makes the non-TTY path echo or
   // fabricate a secret. Empty is the only safe answer.
   eq(await askSecret('token?'), '', 'empty');
+});
+
+console.log('\nTicket providers');
+
+await check('Linear is gone from the provider set', () => {
+  eq(Object.keys(PROVIDERS).sort(), ['github-issues', 'jira'], 'providers');
+  ok(!('linear' in PROVIDERS), 'no linear key');
+});
+
+await check('no provider declares a Linear variable', () => {
+  for (const [name, spec] of Object.entries(PROVIDERS)) {
+    for (const v of [...spec.vars, ...spec.secretVars]) {
+      ok(!/LINEAR/i.test(v), `${name} still references ${v}`);
+    }
+  }
+});
+
+console.log('\nGraphify');
+
+await check('the package name is graphifyy, not graphify or graphify-cli', () => {
+  // graphify and graphify-cli both 404 on PyPI; the old setup.md told people to
+  // install graphify-cli, which could never have worked.
+  eq(graphify.PACKAGE_NAME, 'graphifyy', 'package name');
+  for (const cmd of graphify.installCommands()) {
+    ok(cmd.endsWith(' graphifyy'), `install command targets the right package: ${cmd}`);
+    ok(!/graphify-cli/.test(cmd), `no graphify-cli in: ${cmd}`);
+  }
+});
+
+await check('installers are ordered isolated-first', () => {
+  const ids = graphify.installCommands();
+  ok(ids[0].startsWith('uv '), `uv first, got ${ids[0]}`);
+  ok(ids.at(-1).startsWith('pip3 '), `bare pip last, got ${ids.at(-1)}`);
+});
+
+await check('hasGraph looks for graphify-out/graph.json', () => {
+  const dir = join(root, 'gfy-graph');
+  mkdirSync(join(dir, 'graphify-out'), { recursive: true });
+  eq(graphify.hasGraph(dir), false, 'absent before');
+  writeFileSync(join(dir, 'graphify-out', 'graph.json'), '{}');
+  eq(graphify.hasGraph(dir), true, 'present after');
+});
+
+await check('a missing installer binary fails cleanly instead of throwing', async () => {
+  const res = await graphify.install({ binary: 'workticket-no-such-binary-xyz', args: ['x'], label: 'nope' });
+  eq(res.ok, false, 'ok');
+  ok(res.error && res.error.length > 0, 'reports an error');
+  ok(!/undefined/.test(res.error), `error is readable: ${res.error}`);
+});
+
+await check('inspect reports a boolean even when the CLI is absent', async () => {
+  const state = await graphify.inspect();
+  eq(typeof state.installed, 'boolean', 'installed is a boolean');
+  ok(state.installed === false || state.version === null || typeof state.version === 'string', 'version shape');
 });
 
 console.log('');

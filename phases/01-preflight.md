@@ -51,7 +51,6 @@ related. They exist to be stashed and set aside.
 
 Based on `{config.ticket_system.provider}`:
 - **jira**: See `integrations/jira.md` — check env vars and API connectivity
-- **linear**: See `integrations/linear.md`
 - **github-issues**: Check `gh` CLI is authenticated
 
 ### 6. Tool availability

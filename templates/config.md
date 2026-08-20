@@ -32,13 +32,13 @@ username_format: "kebab-case"   # camelCase | kebab-case | as-is
 ## Ticket system
 
 ```yaml
-provider: ""                    # jira | linear | github-issues
+provider: ""                    # jira | github-issues
 base_url: ""                    # e.g. https://mycompany.atlassian.net (Jira only)
 auth_method: "api-token"        # api-token | browser | manual
 env_vars:
   url: "JIRA_BASE_URL"          # Jira only
   email: "JIRA_USER_EMAIL"      # Jira only
-  token: "JIRA_API_TOKEN"       # Jira: API token | Linear: LINEAR_API_KEY
+  token: "JIRA_API_TOKEN"       # Jira only
 ```
 
 ## Code review skill
