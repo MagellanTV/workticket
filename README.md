@@ -1,4 +1,4 @@
-# alfred-code
+# workticket
 
 A Claude Code skill that automates the full development cycle: from reading a ticket to creating a Pull Request. It works as a 12-phase orchestrator with confidence-based routing, meaning it automatically decides when to proceed on its own and when to ask the developer for confirmation.
 
@@ -11,37 +11,54 @@ A Claude Code skill that automates the full development cycle: from reading a ti
 
 ## Installation
 
-1. Clone or copy this directory to `~/.claude/skills/alfred-code/`
+1. Clone or copy this directory to `~/.claude/skills/workticket/`
 2. Register the skill in `~/.claude/CLAUDE.md`:
    ```markdown
-   # alfred-code
-   - **alfred-code** (`~/.claude/skills/alfred-code/SKILL.md`) — ticket to PR workflow. Trigger: `/alfred-code`
+   # workticket
+   - **workticket** (`~/.claude/skills/workticket/SKILL.md`) — ticket to PR workflow. Trigger: `/workticket`
    ```
 3. Run setup in any project:
    ```
-   /alfred-code setup
+   /workticket setup
    ```
+
+### Upgrading from `alfred-code`
+
+This skill was previously named `alfred-code`. If you have the old version installed:
+
+1. Remove the old skill directory: `rm -rf ~/.claude/skills/alfred-code/`
+2. Update the registration in `~/.claude/CLAUDE.md` to the `workticket` entry above.
+
+Your **projects need no manual work**. On the next `/workticket TICKET-ID` run, Phase 01 detects a
+legacy `.claude/alfred-code/` directory and migrates it in place: `git mv` when the directory is
+tracked (so file history follows the rename), plain `mv` otherwise. The config, every plan, every
+history entry, and `lessons.md` are preserved, path references inside those files are rewritten,
+and the stale `.gitignore` entries are replaced. Setup is not re-run.
+
+If a project somehow ends up with *both* `.claude/alfred-code/` and `.claude/workticket/`, the
+workflow stops and asks which to keep rather than merging them — nothing is deleted without your
+explicit confirmation.
 
 ## Usage
 
 ### Set up a new project
 
 ```
-/alfred-code setup
+/workticket setup
 ```
 
-Checks 11 dependencies (git, gh, ticket system, linter, tests, permissions, etc.), creates the `.claude/alfred-code/` directory in the project with the configuration file, and walks you through fixing anything that's missing.
+Checks 11 dependencies (git, gh, ticket system, linter, tests, permissions, etc.), creates the `.claude/workticket/` directory in the project with the configuration file, and walks you through fixing anything that's missing.
 
 To reconfigure interactively:
 
 ```
-/alfred-code setup reconfigure
+/workticket setup reconfigure
 ```
 
 ### Run the workflow
 
 ```
-/alfred-code TICKET-ID
+/workticket TICKET-ID
 ```
 
 Where `TICKET-ID` is the ticket identifier (e.g. `PROJ-123`, `BUG-456`). If the project isn't configured yet, setup runs automatically.
@@ -64,7 +81,7 @@ The workflow is split into 4 stages:
 |-------|------|--------------|
 | 04 | Create Branch | Creates the branch following the configured naming pattern |
 | 05 | Analyze | Explores the codebase with parallel agents to understand context |
-| 06 | Plan | Generates the implementation plan and saves it to `.claude/alfred-code/plans/` |
+| 06 | Plan | Generates the implementation plan and saves it to `.claude/workticket/plans/` |
 
 ### Build (phases 7-9) — loop
 
@@ -99,7 +116,7 @@ When everything scores HIGH (typo, config, string change), the workflow compress
 ## File Structure
 
 ```
-~/.claude/skills/alfred-code/          # Global skill (shared across projects)
+~/.claude/skills/workticket/           # Global skill (shared across projects)
 ├── SKILL.md                           # Skill entry point
 ├── README.md                          # This file
 ├── setup/
@@ -134,7 +151,7 @@ When everything scores HIGH (typo, config, string change), the workflow compress
     ├── history-README.md              # History directory README
     └── lessons.md                     # Lessons learned template
 
-.claude/alfred-code/                   # Per-project data (inside the repo)
+.claude/workticket/                    # Per-project data (inside the repo)
 ├── config.md                          # Project-specific configuration
 ├── plans/                             # Approved plans per ticket
 ├── review/
@@ -144,7 +161,7 @@ When everything scores HIGH (typo, config, string change), the workflow compress
 
 ## Project Configuration
 
-The file `.claude/alfred-code/config.md` holds all project-specific settings. It is created automatically during setup. The main sections are:
+The file `.claude/workticket/config.md` holds all project-specific settings. It is created automatically during setup. The main sections are:
 
 | Section | What it configures | Example |
 |---------|-------------------|---------|
@@ -198,6 +215,6 @@ If any permissions are missing, setup reports them and offers to add them automa
 
 | Command | Action |
 |---------|--------|
-| `/alfred-code setup` | Configure a new project |
-| `/alfred-code setup reconfigure` | Reconfigure interactively |
-| `/alfred-code PROJ-123` | Run the full workflow for ticket PROJ-123 |
+| `/workticket setup` | Configure a new project |
+| `/workticket setup reconfigure` | Reconfigure interactively |
+| `/workticket PROJ-123` | Run the full workflow for ticket PROJ-123 |

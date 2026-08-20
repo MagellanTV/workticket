@@ -1,6 +1,6 @@
-# Alfred-code — Project Configuration
+# Workticket — Project Configuration
 
-Fill this file when setting up alfred-code in a new project. The workflow reads all
+Fill this file when setting up workticket in a new project. The workflow reads all
 project-specific values from here.
 
 ---

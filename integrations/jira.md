@@ -2,7 +2,7 @@
 
 ## API access
 
-Requires env vars (names from `.claude/alfred-code/config.md`):
+Requires env vars (names from `.claude/workticket/config.md`):
 - `{config.ticket_system.env_vars.url}` — Jira instance URL
 - `{config.ticket_system.env_vars.email}` — Atlassian email
 - `{config.ticket_system.env_vars.token}` — API token

@@ -1,23 +1,24 @@
-# alfred-code setup — Dependency Configuration
+# workticket setup — Dependency Configuration
 
-Checks every tool and integration that alfred-code needs for the current project. For each
+Checks every tool and integration that workticket needs for the current project. For each
 missing or misconfigured dependency, walks the developer through setup.
 
 ## Trigger
 
-- `alfred-code setup` — check dependencies and guide fixes
-- `alfred-code setup reconfigure` — interactive walkthrough to update config.md
+- `workticket setup` — check dependencies and guide fixes
+- `workticket setup reconfigure` — interactive walkthrough to update config.md
 
 ## Execution order
 
-1. Bootstrap `.claude/alfred-code/` if it doesn't exist
-2. Update `.gitignore` to exclude alfred-code and graphify working files
-3. Ensure CLAUDE.md exists — if missing, run `/init` before continuing
-4. Read `.claude/alfred-code/config.md`
-5. If `reconfigure` argument: run interactive config walkthrough, then continue to step 6
-6. Run ALL dependency checks below (1 through 11) — do not skip any
-7. Present dashboard
-8. Walk through fixes for failed checks
+1. Migrate a legacy `.claude/alfred-code/` directory if one is present
+2. Bootstrap `.claude/workticket/` if it doesn't exist
+3. Update `.gitignore` to exclude workticket and graphify working files
+4. Ensure CLAUDE.md exists — if missing, run `/init` before continuing
+5. Read `.claude/workticket/config.md`
+6. If `reconfigure` argument: run interactive config walkthrough, then continue to step 7
+7. Run ALL dependency checks below (1 through 11) — do not skip any
+8. Present dashboard
+9. Walk through fixes for failed checks
 
 IMPORTANT: You MUST run every numbered check below (1 through 11). Read the config file first,
 then use its values in each check. Do not skip checks because a field is empty — report it as
@@ -28,45 +29,129 @@ reduce the number of tool invocations. The checks below show the batched form.
 
 ---
 
+## Step 0: Migrate legacy `.claude/alfred-code/`
+
+The skill was previously named `alfred-code`. Projects set up under the old name keep their
+plans, history, and lessons in `.claude/alfred-code/`. Migrate that data instead of starting
+over — the accumulated lessons are the most valuable part of it.
+
+```bash
+echo "=== LEGACY ===" && test -d .claude/alfred-code && echo "EXISTS" || echo "NONE" && echo "=== CURRENT ===" && test -d .claude/workticket && echo "EXISTS" || echo "NONE" && echo "=== TRACKED ===" && git ls-files --error-unmatch .claude/alfred-code >/dev/null 2>&1 && echo "YES" || echo "NO"
+```
+
+Route on the two directory results:
+
+| LEGACY | CURRENT | Action |
+|---|---|---|
+| NONE | any | Nothing to migrate — continue to Step 1 |
+| EXISTS | NONE | Migrate (below) |
+| EXISTS | EXISTS | **Stop and ask** — do not merge or overwrite |
+
+### If LEGACY EXISTS and CURRENT is NONE
+
+Move the directory. Use `git mv` when the legacy path is TRACKED, so history follows the
+rename; plain `mv` otherwise (the working files are usually gitignored):
+
+```bash
+git mv .claude/alfred-code .claude/workticket
+```
+
+```bash
+mv .claude/alfred-code .claude/workticket
+```
+
+Then rewrite stale paths *inside* the migrated files — old plans, history entries, and
+`lessons.md` reference `.claude/alfred-code/` and `~/.claude/skills/alfred-code/`:
+
+```bash
+grep -rIil 'alfred-code' .claude/workticket 2>/dev/null | tr '\n' '\0' | xargs -0 -r sed -i '' -e 's|alfred-code|workticket|g' -e 's|Alfred-code|Workticket|g'
+```
+
+Report what moved:
+
+```bash
+echo "=== MIGRATED ===" && ls .claude/workticket && echo "=== COUNTS ===" && echo "plans: $(ls .claude/workticket/plans 2>/dev/null | wc -l | tr -d ' ')" && echo "history: $(ls .claude/workticket/history 2>/dev/null | wc -l | tr -d ' ')"
+```
+
+Tell the developer:
+
+```
+Migrated `.claude/alfred-code/` → `.claude/workticket/`
+- config.md carried over (no re-setup needed)
+- {N} plan files, {N} history entries, lessons.md preserved
+- internal path references updated
+```
+
+Step 1 will then find the directory EXISTS and skip bootstrapping, and Step 2 replaces the
+stale `.gitignore` entries.
+
+### If BOTH exist
+
+Do not merge automatically — the two directories may hold conflicting configs. Show what each
+contains and ask the developer which to keep:
+
+```bash
+echo "=== LEGACY ===" && find .claude/alfred-code -type f | sort && echo "=== CURRENT ===" && find .claude/workticket -type f | sort
+```
+
+Ask: "Both `.claude/alfred-code/` and `.claude/workticket/` exist. Keep the new one and delete
+the legacy directory, or copy specific files across first?" Wait for the answer. Never delete
+the legacy directory without an explicit yes.
+
 ## Step 1: Bootstrap project directory
 
 ```bash
-test -d .claude/alfred-code && echo "EXISTS" || echo "MISSING"
+test -d .claude/workticket && echo "EXISTS" || echo "MISSING"
 ```
 
 If MISSING:
 1. Create directories:
    ```bash
-   mkdir -p .claude/alfred-code/plans .claude/alfred-code/review .claude/alfred-code/history
+   mkdir -p .claude/workticket/plans .claude/workticket/review .claude/workticket/history
    ```
 2. Copy templates:
    ```bash
-   cp ~/.claude/skills/alfred-code/templates/config.md .claude/alfred-code/config.md
-   cp ~/.claude/skills/alfred-code/templates/plans-README.md .claude/alfred-code/plans/README.md
-   cp ~/.claude/skills/alfred-code/templates/history-README.md .claude/alfred-code/history/README.md
-   cp ~/.claude/skills/alfred-code/templates/lessons.md .claude/alfred-code/review/lessons.md
+   cp ~/.claude/skills/workticket/templates/config.md .claude/workticket/config.md
+   cp ~/.claude/skills/workticket/templates/plans-README.md .claude/workticket/plans/README.md
+   cp ~/.claude/skills/workticket/templates/history-README.md .claude/workticket/history/README.md
+   cp ~/.claude/skills/workticket/templates/lessons.md .claude/workticket/review/lessons.md
    ```
-3. Tell the developer: "Created `.claude/alfred-code/`. Please fill in `config.md` or run `alfred-code setup reconfigure`."
+3. Tell the developer: "Created `.claude/workticket/`. Please fill in `config.md` or run `workticket setup reconfigure`."
 
 ## Step 2: Update .gitignore
 
-Ensure the project's `.gitignore` excludes alfred-code working files and graphify output.
+Ensure the project's `.gitignore` excludes workticket working files and graphify output.
 These are local workflow artifacts that should not be committed to the repository.
 
 Required entries:
 
 ```
-# alfred-code workflow data
-.claude/alfred-code/plans/
-.claude/alfred-code/history/
-.claude/alfred-code/review/
+# workticket workflow data
+.claude/workticket/plans/
+.claude/workticket/history/
+.claude/workticket/review/
 
 # graphify output
 graphify-out/
 ```
 
-Note: `.claude/alfred-code/config.md` is NOT ignored — it should be committed so the whole
+Note: `.claude/workticket/config.md` is NOT ignored — it should be committed so the whole
 team shares the same workflow configuration.
+
+If the project was migrated in Step 0, `.gitignore` still carries the legacy entries. Replace
+them in place rather than appending duplicates:
+
+```bash
+grep -n 'alfred-code' .gitignore 2>/dev/null || echo "NO_LEGACY_ENTRIES"
+```
+
+If any are found, rewrite them:
+
+```bash
+sed -i '' -e 's|\.claude/alfred-code/|.claude/workticket/|g' -e 's|# alfred-code workflow data|# workticket workflow data|' .gitignore
+```
+
+Then run the presence check below — the rewritten entries will already read FOUND.
 
 Check which entries are already present and only add the missing ones:
 
@@ -79,7 +164,7 @@ If `.gitignore` is MISSING, create it with the entries above.
 If `.gitignore` EXISTS, check each entry:
 
 ```bash
-echo "=== PLANS ===" && grep -qF '.claude/alfred-code/plans/' .gitignore 2>/dev/null && echo "FOUND" || echo "MISSING" && echo "=== HISTORY ===" && grep -qF '.claude/alfred-code/history/' .gitignore 2>/dev/null && echo "FOUND" || echo "MISSING" && echo "=== REVIEW ===" && grep -qF '.claude/alfred-code/review/' .gitignore 2>/dev/null && echo "FOUND" || echo "MISSING" && echo "=== GRAPHIFY ===" && grep -qF 'graphify-out/' .gitignore 2>/dev/null && echo "FOUND" || echo "MISSING"
+echo "=== PLANS ===" && grep -qF '.claude/workticket/plans/' .gitignore 2>/dev/null && echo "FOUND" || echo "MISSING" && echo "=== HISTORY ===" && grep -qF '.claude/workticket/history/' .gitignore 2>/dev/null && echo "FOUND" || echo "MISSING" && echo "=== REVIEW ===" && grep -qF '.claude/workticket/review/' .gitignore 2>/dev/null && echo "FOUND" || echo "MISSING" && echo "=== GRAPHIFY ===" && grep -qF 'graphify-out/' .gitignore 2>/dev/null && echo "FOUND" || echo "MISSING"
 ```
 
 For each MISSING entry, append it to `.gitignore`. Group new entries under their comment
@@ -110,10 +195,10 @@ If CLAUDE.md already exists, continue to Step 4.
 
 ## Step 4: Read config
 
-Use the Read tool (not bash) to read `.claude/alfred-code/config.md`:
+Use the Read tool (not bash) to read `.claude/workticket/config.md`:
 
 ```
-Read({ file_path: ".claude/alfred-code/config.md" })
+Read({ file_path: ".claude/workticket/config.md" })
 ```
 
 Parse every YAML block to extract current values. You need these for all checks below.
@@ -121,7 +206,7 @@ Do NOT use `cat` or `Bash` to read this file — the Read tool does not require 
 
 ## Step 5: Interactive reconfigure (only with `reconfigure` argument)
 
-Walk through each section of `.claude/alfred-code/config.md`. For each section:
+Walk through each section of `.claude/workticket/config.md`. For each section:
 - Show the current values
 - Ask what to change (or skip to keep current)
 - Write the updated values to the file
@@ -216,7 +301,7 @@ If MISSING:
 ```bash
 git branch -r | sed 's/  origin\///' | sort -u | head -20
 ```
-Show the list. Ask: "Which branch should alfred-code use as the base?" Update config.
+Show the list. Ask: "Which branch should workticket use as the base?" Update config.
 
 ### Check 3: GitHub CLI
 
@@ -326,10 +411,10 @@ graphify build && test -f graphify-out/graph.json && echo "BUILD_SUCCESS" || ech
 - CLI found + graph not found + build succeeded → OK (just built)
 - CLI found + graph not found + build failed → ERR: "graphify build failed"
 
-### Check 9: alfred-code skill
+### Check 9: workticket skill
 
 ```bash
-test -f ~/.claude/skills/alfred-code/SKILL.md && echo "INSTALLED" || echo "MISSING"
+test -f ~/.claude/skills/workticket/SKILL.md && echo "INSTALLED" || echo "MISSING"
 ```
 
 ### Check 10: CLAUDE.md
@@ -393,12 +478,12 @@ Write(~/.claude/**)
 #### 11b — additionalDirectories
 
 Check that `permissions.additionalDirectories` includes `/Users/juanmanuel/.claude` (the full
-`~/.claude` directory, not just the skills subdirectory). This allows alfred-code to read
+`~/.claude` directory, not just the skills subdirectory). This allows workticket to read
 `settings.json`, credential files, and other config without permission prompts.
 
 #### 11c — Dynamic command permissions (project-specific)
 
-Read the project's `.claude/alfred-code/config.md` and extract these commands if configured:
+Read the project's `.claude/workticket/config.md` and extract these commands if configured:
 - `linter.command` (e.g., `npm run lint`)
 - `linter.fix_command` (e.g., `npm run lint -- --fix`)
 - `build_test.test_command` (e.g., `npm test`)
@@ -435,7 +520,7 @@ patterns. These are project-specific, so also suggest adding them to the project
 After ALL checks complete, present this table:
 
 ```
-## alfred-code setup — Dependency Status
+## workticket setup — Dependency Status
 
 | #  | Dependency          | Status | Notes                          |
 |----|---------------------|--------|--------------------------------|
@@ -447,7 +532,7 @@ After ALL checks complete, present this table:
 | 6  | Test runner         | OK/N/A | {type}: {command}              |
 | 7  | Code review skill   | OK/N/A | {skill_name or "not configured"} |
 | 8  | Graphify            | OK/N/A | {status detail}                |
-| 9  | alfred-code skill   | OK/ERR | {path}                         |
+| 9  | workticket skill   | OK/ERR | {path}                         |
 | 10 | CLAUDE.md           | OK/ERR | {exists or "created by /init"} |
 | 11 | Claude permissions  | OK/ERR | {N} patterns OK / {M} missing  |
 ```
@@ -467,7 +552,7 @@ For each ERR item:
 ## After setup
 
 When all required dependencies pass:
-"Setup complete! Run `alfred-code {TICKET-ID}` to start."
+"Setup complete! Run `workticket {TICKET-ID}` to start."
 
 ---
 
@@ -475,7 +560,7 @@ When all required dependencies pass:
 
 | Command | What it does |
 |---|---|
-| `alfred-code setup` | Run all checks, show dashboard, guide fixes |
-| `alfred-code setup reconfigure` | Update config.md interactively, then run all checks |
+| `workticket setup` | Run all checks, show dashboard, guide fixes |
+| `workticket setup reconfigure` | Update config.md interactively, then run all checks |
 
 Safe to run anytime — it only checks and guides, never modifies without asking.

@@ -18,7 +18,7 @@ curl -s -X POST https://api.linear.app/graphql \
 
 ### Field mapping
 
-| Linear field | Alfred-code field |
+| Linear field | Workticket field |
 |---|---|
 | `title` | Title |
 | `state.name` | Status |

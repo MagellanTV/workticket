@@ -1,6 +1,6 @@
 # Execution History — Template
 
-This file is a template. In actual use, history files live in `.claude/alfred-code/history/` per project.
+This file is a template. In actual use, history files live in `.claude/workticket/history/` per project.
 
 ## Entry format
 

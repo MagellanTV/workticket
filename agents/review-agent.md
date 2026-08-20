@@ -1,6 +1,6 @@
 # Code Review Agent
 
-Reads `.claude/alfred-code/config.md` to determine which review skill and references to use.
+Reads `.claude/workticket/config.md` to determine which review skill and references to use.
 
 ## Phase 03 — Early ticket review (background)
 

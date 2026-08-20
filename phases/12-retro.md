@@ -33,6 +33,6 @@ Ask: "Any feedback? I'll update the skill for next time."
 ## 4. Apply
 
 1. Update skill files if approved
-2. Append to `.claude/alfred-code/review/lessons.md`
-3. Create `.claude/alfred-code/history/{TICKET-ID}.md`
+2. Append to `.claude/workticket/review/lessons.md`
+3. Create `.claude/workticket/history/{TICKET-ID}.md`
 4. Save to memory if significant

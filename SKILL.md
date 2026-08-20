@@ -1,13 +1,13 @@
 ---
-name: alfred-code
+name: workticket
 description: >
   End-to-end development workflow: reads a ticket, plans the implementation,
   writes code following project standards, validates, and creates a draft PR.
-  Trigger: alfred-code TICKET-ID (e.g. alfred-code PROJ-123).
-  Use alfred-code setup to configure dependencies for a new project.
+  Trigger: workticket TICKET-ID (e.g. workticket PROJ-123).
+  Use workticket setup to configure dependencies for a new project.
 ---
 
-# /alfred-code — Ticket-to-PR Development Workflow
+# /workticket — Ticket-to-PR Development Workflow
 
 Orchestrates the full development cycle from reading a ticket to creating a draft PR. Uses confidence-gated routing to decide when to auto-proceed vs. ask the developer, and a Plan-Approve-Build loop that re-plans when validation or review reveals the approach was wrong.
 
@@ -23,16 +23,16 @@ Parse the first argument to decide which mode to run:
 
 ---
 
-## Workflow mode: `alfred-code <TICKET-ID>`
+## Workflow mode: `workticket <TICKET-ID>`
 
-**First time?** If Phase 01 (preflight) detects missing dependencies or `.claude/alfred-code/config.md` does not exist, run setup mode automatically before proceeding.
+**First time?** If Phase 01 (preflight) detects missing dependencies or `.claude/workticket/config.md` does not exist, run setup mode automatically before proceeding.
 
 ## File Layout
 
 The skill separates **engine** (global, shared across projects) from **project data** (per-project, lives in the repo).
 
 ```
-~/.claude/skills/alfred-code/          <- GLOBAL (this skill)
+~/.claude/skills/workticket/           <- GLOBAL (this skill)
 ├── SKILL.md                          <- you are here
 ├── setup/
 │   └── setup.md                      <- setup & dependency checks
@@ -55,7 +55,7 @@ The skill separates **engine** (global, shared across projects) from **project d
     ├── history-README.md
     └── lessons.md
 
-.claude/alfred-code/                   <- PER-PROJECT (created per repo)
+.claude/workticket/                    <- PER-PROJECT (created per repo)
 ├── config.md                         <- project-specific configuration
 ├── plans/                            <- approved plans per ticket
 │   └── README.md
@@ -65,7 +65,13 @@ The skill separates **engine** (global, shared across projects) from **project d
     └── README.md
 ```
 
-**On first run in a project**: if `.claude/alfred-code/config.md` does not exist, run setup mode automatically. Do not ask — just run it.
+**On first run in a project**: if `.claude/workticket/config.md` does not exist, run setup mode automatically. Do not ask — just run it.
+
+**Migrating from `alfred-code`**: this skill was previously named `alfred-code`. If a project has
+`.claude/alfred-code/` and no `.claude/workticket/`, Phase 01 renames it in place (with `git mv`
+when tracked) and rewrites stale paths inside the migrated files — config, plans, history, and
+lessons all carry over, and setup is NOT re-run. If both directories exist, the workflow stops and
+asks which to keep. See `phases/01-preflight.md` step 1 and `setup/setup.md` Step 0.
 
 Load files lazily — read phase/agent files only when you reach that step.
 
@@ -73,7 +79,7 @@ Load files lazily — read phase/agent files only when you reach that step.
 
 ## Configuration
 
-All project-specific values come from `.claude/alfred-code/config.md`. Read it at the start of every session. Key fields:
+All project-specific values come from `.claude/workticket/config.md`. Read it at the start of every session. Key fields:
 
 | Config field | Used in | Example |
 |---|---|---|
@@ -170,7 +176,7 @@ Phases 05-09 form a loop:
 
 ### Plan persistence
 
-Each plan iteration is saved to `.claude/alfred-code/plans/{TICKET-ID}-v{N}.md`. This serves three purposes:
+Each plan iteration is saved to `.claude/workticket/plans/{TICKET-ID}-v{N}.md`. This serves three purposes:
 
 1. **Loop context** — when re-entering Phase 06, the agent sees what was tried before and why it failed
 2. **Decision record** — why approach A was chosen over B
@@ -240,8 +246,9 @@ All agent prompts include: ticket ID, ticket summary, config-driven project cont
 
 ## Notes
 
-- Use `alfred-code setup` to configure dependencies for a new project
-- Use `alfred-code setup reconfigure` to update an existing config interactively
-- Project data (plans, history, lessons) lives in `.claude/alfred-code/` per repo
+- Use `workticket setup` to configure dependencies for a new project
+- Use `workticket setup reconfigure` to update an existing config interactively
+- Project data (plans, history, lessons) lives in `.claude/workticket/` per repo
+- Projects still on `.claude/alfred-code/` are migrated automatically on the next run
 - The workflow engine (this skill) is global and project-agnostic
 - If a code review skill is configured, it handles all review (not generic /code-review)

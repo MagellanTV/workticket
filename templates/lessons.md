@@ -1,6 +1,6 @@
 # Lessons Learned
 
-Accumulated retro learnings from alfred-code sessions. Entries added by Phase 12.
+Accumulated retro learnings from workticket sessions. Entries added by Phase 12.
 
 ---
 

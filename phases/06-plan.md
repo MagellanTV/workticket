@@ -14,12 +14,12 @@ Re-entry point for the Plan-Approve-Build loop.
 
 1. Score confidence from Phase 05
 2. Generate plan (inline or via `agents/plan-agent.md`)
-3. Save to `.claude/alfred-code/plans/{TICKET-ID}-v1.md`
+3. Save to `.claude/workticket/plans/{TICKET-ID}-v1.md`
 4. Present, wait for approval
 
 ## Re-entry from Phase 08
 
-1. Read previous plans from `.claude/alfred-code/plans/`
+1. Read previous plans from `.claude/workticket/plans/`
 2. Add validation findings as constraints
 3. Re-generate, save as v{N+1}
 4. Mark previous as `superseded`

@@ -1,6 +1,6 @@
 # Lessons Learned — Template
 
-This file is a template. In actual use, lessons live in `.claude/alfred-code/review/lessons.md` per project.
+This file is a template. In actual use, lessons live in `.claude/workticket/review/lessons.md` per project.
 
 Entries are added by Phase 12 (retro) after each session. Read before proposing improvements.
 

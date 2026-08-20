@@ -1,6 +1,6 @@
 # Phase 08 — Validate & Test `GATED + AGENTS + LOOP`
 
-Validation depth scales with confidence. Reads commands from `.claude/alfred-code/config.md`.
+Validation depth scales with confidence. Reads commands from `.claude/workticket/config.md`.
 
 ## Confidence routing
 

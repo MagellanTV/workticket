@@ -12,7 +12,7 @@ gh issue view {ISSUE-NUMBER} --json title,body,labels,assignees,milestone,state
 
 ### Field mapping
 
-| GitHub field | Alfred-code field |
+| GitHub field | Workticket field |
 |---|---|
 | `title` | Title |
 | `labels[].name` | Type (look for "bug", "enhancement", etc.) |

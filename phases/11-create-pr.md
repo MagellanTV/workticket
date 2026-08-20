@@ -1,11 +1,11 @@
 # Phase 11 — Create Draft PR `SEQUENTIAL GATES`
 
-All values from `.claude/alfred-code/config.md`.
+All values from `.claude/workticket/config.md`.
 
 Follow these steps IN ORDER. Each GATE step requires developer approval before continuing.
 Do NOT skip steps. Do NOT reorder steps. Do NOT combine gates.
 
-Before drafting ANY text in this phase, skim `.claude/alfred-code/review/lessons.md` for
+Before drafting ANY text in this phase, skim `.claude/workticket/review/lessons.md` for
 PR-writing-style entries.
 
 ---
@@ -18,7 +18,7 @@ git status
 
 List changed files explicitly — never `git add -A`.
 
-If an approved plan exists at `.claude/alfred-code/plans/{TICKET-ID}-v{N}.md`, diff the file list
+If an approved plan exists at `.claude/workticket/plans/{TICKET-ID}-v{N}.md`, diff the file list
 against that plan's expected files. Call out anything unexpected and ask whether it belongs.
 
 Do NOT run `git add` yet — just identify what will be committed.
@@ -172,7 +172,7 @@ Never use `git add -A` or `git add .`.
 2. Draft the PR title and body following the writing style rules below
 3. Run the tone check (`agents/tone-review-agent.md`) on the full PR body. Fix flagged items
    silently and re-check once
-4. Write the cleaned PR body to `.claude/alfred-code/plans/{TICKET-ID}-PR.md`
+4. Write the cleaned PR body to `.claude/workticket/plans/{TICKET-ID}-PR.md`
 
 ### Writing style (applies to commit message, PR title, PR body, every comment)
 
@@ -199,7 +199,7 @@ Title: {PR title}
 ─────────────────────────────────────────────────
 ```
 
-Also mention: "Full preview saved to `.claude/alfred-code/plans/{TICKET-ID}-PR.md`"
+Also mention: "Full preview saved to `.claude/workticket/plans/{TICKET-ID}-PR.md`"
 
 Ask: "Approve this PR? (yes / edit / cancel)"
 

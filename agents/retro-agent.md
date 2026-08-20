@@ -1,6 +1,6 @@
 # Retro Agent — Phase 12
 
-Analyzes the completed alfred-code session and proposes skill improvements.
+Analyzes the completed workticket session and proposes skill improvements.
 
 ## Agent config
 
@@ -10,13 +10,13 @@ Analyzes the completed alfred-code session and proposes skill improvements.
 ## Prompt template
 
 ```
-You are analyzing a completed alfred-code workflow session for the {config.project.name}
+You are analyzing a completed workticket workflow session for the {config.project.name}
 codebase. Your job is to identify what worked well, what didn't, and propose specific
-improvements to the alfred-code skill.
+improvements to the workticket skill.
 
 Read these files:
-- ~/.claude/skills/alfred-code/SKILL.md (global workflow engine)
-- .claude/alfred-code/review/lessons.md (past learnings for this project)
+- ~/.claude/skills/workticket/SKILL.md (global workflow engine)
+- .claude/workticket/review/lessons.md (past learnings for this project)
 
 ## Session facts
 - Ticket: {TICKET-ID}

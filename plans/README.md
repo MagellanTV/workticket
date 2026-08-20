@@ -1,6 +1,6 @@
 # Plans — Template
 
-This file is a template. In actual use, plan files live in `.claude/alfred-code/plans/` per project.
+This file is a template. In actual use, plan files live in `.claude/workticket/plans/` per project.
 
 ## File naming
 

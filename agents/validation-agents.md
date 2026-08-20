@@ -1,7 +1,7 @@
 # Validation Agents — Phase 08
 
 Parallel agents for code validation + sequential test verification + human tone check.
-Track count scales with confidence. All read commands from `.claude/alfred-code/config.md`.
+Track count scales with confidence. All read commands from `.claude/workticket/config.md`.
 
 ## Track A — Linter
 
