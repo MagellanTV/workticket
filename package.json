@@ -1,6 +1,6 @@
 {
   "name": "workticket",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Claude Code skill that drives the full development cycle from ticket to draft PR, with a zero-dependency installer.",
   "type": "module",
   "bin": {
