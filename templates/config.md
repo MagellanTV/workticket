@@ -3,6 +3,9 @@
 Fill this file when setting up workticket in a new project. The workflow reads all
 project-specific values from here.
 
+This file is local: `.claude/` is gitignored, so it is not shared through the repository.
+Each developer runs `npx workticket init` and keeps their own copy.
+
 ---
 
 ## Project

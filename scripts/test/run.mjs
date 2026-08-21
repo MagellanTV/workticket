@@ -87,9 +87,20 @@ console.log('\nGitignore planning');
 
 await check('adds all entries to an empty .gitignore', () => {
   const p = planGitignore('');
-  eq(p.missing.length, 4, 'missing count');
-  ok(p.next.includes('# workticket workflow data'), 'workticket header present');
-  ok(p.next.includes('graphify-out/'), 'graphify entry present');
+  eq(p.missing, ['.claude/', 'graphify-out/'], 'the two entries');
+  ok(p.next.includes('.claude/'), 'the whole .claude directory is ignored');
+});
+
+await check('nothing under .claude is left committable', () => {
+  // config.md, the plans, the fetched PR template -- none of it belongs in the
+  // repository, and ignoring the directory covers anything added there later.
+  const p = planGitignore('');
+  const lines = p.next.split('\n').map((l) => l.trim());
+  ok(lines.includes('.claude/'), 'the directory itself is the entry');
+  ok(
+    !lines.some((l) => l.startsWith('.claude/') && l !== '.claude/'),
+    `no narrower .claude entry that would leave siblings tracked: ${lines.filter((l) => l.startsWith('.claude/'))}`,
+  );
 });
 
 await check('is idempotent -- second pass changes nothing', () => {
@@ -102,14 +113,37 @@ await check('is idempotent -- second pass changes nothing', () => {
 await check('preserves unrelated user entries', () => {
   const p = planGitignore('node_modules/\ndist/\n');
   ok(p.next.startsWith('node_modules/\ndist/\n'), 'user entries kept at top');
-  ok(p.next.includes('.claude/workticket/plans/'), 'new entry appended');
+  ok(p.next.includes('.claude/'), 'new entry appended');
+});
+
+await check('replaces the narrower entries an earlier version wrote', () => {
+  const old = [
+    'node_modules/',
+    '',
+    '# workticket workflow data',
+    '.claude/workticket/plans/',
+    '.claude/workticket/history/',
+    '.claude/workticket/review/',
+    '',
+    '# graphify output',
+    'graphify-out/',
+    '',
+  ].join('\n');
+  const p = planGitignore(old);
+  eq(p.superseded.length, 3, 'the three subdirectory entries are recognised');
+  ok(!p.next.includes('.claude/workticket/plans/'), 'narrower entry removed');
+  ok(!p.next.includes('# workticket workflow data'), 'its stale header removed too');
+  ok(p.next.includes('.claude/'), 'replaced by the directory');
+  ok(p.next.startsWith('node_modules/'), "the developer's own entry is untouched");
+  ok(!/\n{3,}/.test(p.next), 'no run of blank lines left behind');
+  eq(planGitignore(p.next).changed, false, 'consolidating is itself idempotent');
 });
 
 await check('does not duplicate a header that already exists', () => {
-  const partial = '# workticket workflow data\n.claude/workticket/plans/\n';
+  const partial = '# workticket / Claude Code local data\n.claude/\n';
   const p = planGitignore(partial);
-  eq((p.next.match(/# workticket workflow data/g) || []).length, 1, 'header count');
-  ok(p.next.includes('.claude/workticket/history/'), 'missing entry added');
+  eq((p.next.match(/# workticket \/ Claude Code local data/g) || []).length, 1, 'header count');
+  ok(p.next.includes('graphify-out/'), 'missing entry added');
 });
 
 console.log('\nProject detection');

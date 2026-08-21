@@ -59,6 +59,10 @@ Do not create the directory or the config yourself. If the installer is unavaila
 reason, the templates in `~/.claude/skills/workticket/templates/` can be copied by hand, but
 say so explicitly rather than silently doing a partial setup.
 
+Nothing under `.claude/` is version-controlled — `init` gitignores the directory. So never
+suggest committing `config.md`, and if a check would be fixed by "commit this so the team gets
+it", say what the developer should run instead.
+
 ## Step 1: Read config
 
 Use the Read tool (not bash) to read `.claude/workticket/config.md`:

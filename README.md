@@ -52,6 +52,12 @@ creating a PR never depends on the network. A template committed in the repo
 over its org default. Point `template_url` at your own file to change the default; if the fetch
 fails, setup carries on and says so — a missing template does not block a PR.
 
+**Nothing under `.claude/` is committed.** `init` adds the whole directory to `.gitignore` — the
+config, the plans and history, the cached PR template, and the local permission settings all stay
+on the machine that created them. The practical consequence is that each developer runs
+`npx workticket init` in a repo themselves, and their configs can diverge; if the team needs one
+shared setup, agree on the values rather than expecting git to carry them.
+
 Both commands are idempotent — re-running them reports "already present" and writes nothing. Add
 `--dry-run` to see every change without making it.
 

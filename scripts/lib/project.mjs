@@ -8,19 +8,57 @@
 import { existsSync, readFileSync, writeFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
+// Nothing under .claude/ belongs in the repository: not the plans, history or
+// lessons, not the fetched PR template, and not config.md. Ignoring the whole
+// directory rather than enumerating subdirectories also means a file added there
+// later -- by us or by Claude Code itself -- is covered without another edit.
 const GITIGNORE_BLOCK = {
-  header: '# workticket workflow data',
-  entries: ['.claude/workticket/plans/', '.claude/workticket/history/', '.claude/workticket/review/'],
+  header: '# workticket / Claude Code local data',
+  entries: ['.claude/'],
 };
 const GRAPHIFY_BLOCK = { header: '# graphify output', entries: ['graphify-out/'] };
 
-// config.md is deliberately NOT ignored -- the team shares one workflow config.
+/**
+ * Subdirectory entries an earlier version wrote. Once `.claude/` is ignored they
+ * are dead weight, so they get replaced rather than left sitting above it.
+ */
+const SUPERSEDED_ENTRIES = [
+  '.claude/workticket/plans/',
+  '.claude/workticket/history/',
+  '.claude/workticket/review/',
+];
+
 export const REQUIRED_IGNORES = [...GITIGNORE_BLOCK.entries, ...GRAPHIFY_BLOCK.entries];
 
-/** Plan the .gitignore edit. Returns { missing, changed, next }. */
+/**
+ * Plan the .gitignore edit. Returns { missing, superseded, changed, next }.
+ *
+ * Entries an earlier version of this tool wrote are dropped when they are made
+ * redundant -- those lines are ours, not the developer's, so consolidating them
+ * is tidying rather than rewriting someone else's file. Anything we did not write
+ * is left exactly where it is.
+ */
 export function planGitignore(current) {
   const original = current ?? '';
   let text = original;
+
+  const superseded = original
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => SUPERSEDED_ENTRIES.includes(l));
+
+  if (superseded.length) {
+    text = text
+      .split('\n')
+      .filter((line) => !SUPERSEDED_ENTRIES.includes(line.trim()))
+      .join('\n')
+      // The old header described only those entries; drop it so the new one is
+      // not preceded by a stale duplicate.
+      .replace(/^# workticket workflow data\n/m, '')
+      // Removing lines leaves gaps; collapse them so the file does not grow a
+      // run of blank lines every time this consolidates.
+      .replace(/\n{3,}/g, '\n\n');
+  }
 
   const present = new Set(
     text
@@ -43,7 +81,7 @@ export function planGitignore(current) {
     text += (text ? '\n' : '') + blocks.join('\n\n') + '\n';
   }
 
-  return { missing, changed: text !== original, next: text };
+  return { missing, superseded, changed: text !== original, next: text };
 }
 
 export function applyGitignore(repoRoot, { dryRun = false } = {}) {

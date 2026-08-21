@@ -175,9 +175,15 @@ export async function run({ flags = {} } = {}) {
   if (!gi.changed) {
     skipped('Already excludes the workflow artifacts.');
   } else if (dryRun) {
-    planned(`${gi.created ? 'create' : 'update'} .gitignore, adding ${gi.missing.length} entr(ies)`);
+    planned(
+      `${gi.created ? 'create' : 'update'} .gitignore, adding ${gi.missing.length} entr(ies)` +
+        (gi.superseded.length ? ` and replacing ${gi.superseded.length} superseded one(s)` : ''),
+    );
   } else {
     good(`${gi.created ? 'Created .gitignore with' : 'Added'} ${gi.missing.length} entr(ies)`);
+    if (gi.superseded.length) {
+      info(dim(`Replaced ${gi.superseded.length} narrower entr(ies) now covered by .claude/`));
+    }
   }
   summary.push(['.gitignore', gi.changed ? (dryRun ? 'would update' : 'updated') : 'already correct']);
 
@@ -237,8 +243,8 @@ export async function run({ flags = {} } = {}) {
     console.log('');
     for (const line of renderPlan(settingsFile, plan)) info(line);
     if (extra.length) info(dim(`Includes ${extra.join(', ')} for this project's own commands.`));
-    info(dim('These apply to this repository only. settings.local.json is personal --'));
-    info(dim('gitignore it if your team does not already.'));
+    info(dim('These apply to this repository only, and .claude/ is gitignored, so the file'));
+    info(dim('stays on your machine.'));
     console.log('');
 
     const consent = dryRun ? { ok: true, reason: 'dry run' } : await confirmWrite('Add these entries?', { assumeYes });
