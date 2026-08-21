@@ -51,21 +51,6 @@ For automation, pass `--yes`. It is genuinely required: with no terminal to ask,
 reports what it *would* change to a settings file and then changes nothing, because a prompt
 nobody can answer is not consent. Back out of a prompt with Ctrl+D and nothing is written either.
 
-`install` also checks for [graphify](https://pypi.org/project/graphifyy/), the optional
-knowledge-graph backend the analyze phase prefers over grep. If it is missing, it offers to
-install it with whichever of `uv`, `pipx` or `pip3` you already have — defaulting to **no**, since
-that pulls a package from PyPI. You can always do it yourself:
-
-```bash
-uv tool install graphifyy
-```
-
-Note the package is `graphifyy`, with two y's. `graphify` and `graphify-cli` do not exist on PyPI.
-
-`init` then enables it in the project config when the CLI is present, and offers to build the
-graph. Neither step is required: without graphify the workflow falls back to grep, so `doctor`
-reports it as a warning, never an error.
-
 To check a setup without changing anything:
 
 ```bash
@@ -181,7 +166,7 @@ Phases 5-9 form a loop: if validation finds architectural issues, it goes back t
 
 | Phase | Name | What it does |
 |-------|------|--------------|
-| 10 | Update Knowledge | Updates graphify and CLAUDE.md if applicable |
+| 10 | Update Knowledge | Refreshes the knowledge graph and CLAUDE.md if applicable |
 | 11 | Create PR | Changelog, commit (with preview), draft PR (with preview) |
 | 12 | Retro | Analyzes the process and saves lessons learned |
 
@@ -197,51 +182,6 @@ Each phase evaluates the complexity of the change and decides how much to involv
 
 When everything scores HIGH (typo, config, string change), the workflow compresses to about 4 total interactions.
 
-## File Structure
-
-```
-~/.claude/skills/workticket/           # Global skill (shared across projects)
-├── SKILL.md                           # Skill entry point
-├── README.md                          # This file
-├── setup/
-│   └── setup.md                       # Setup and dependency checks
-├── phases/
-│   ├── 01-preflight.md                # Initial verification
-│   ├── 02-read-ticket.md              # Ticket reading
-│   ├── 03-present-and-review.md       # Presentation and early review
-│   ├── 04-create-branch.md            # Branch creation
-│   ├── 05-analyze.md                  # Codebase analysis
-│   ├── 06-plan.md                     # Implementation plan
-│   ├── 07-implement.md                # Implementation
-│   ├── 08-validate.md                 # Validation and tests
-│   ├── 09-dev-review.md               # Developer review
-│   ├── 10-update-knowledge.md         # Knowledge base update
-│   ├── 11-create-pr.md                # Commit and PR with previews
-│   └── 12-retro.md                    # Retrospective
-├── agents/
-│   ├── explore-agents.md              # Exploration agents (phase 05)
-│   ├── plan-agent.md                  # Planning agent (phase 06)
-│   ├── review-agent.md                # Code review agent (phases 03, 08)
-│   ├── validation-agents.md           # Validation agents (phase 08)
-│   ├── tone-review-agent.md           # Human tone agent (phases 08, 11)
-│   └── retro-agent.md                 # Retrospective agent (phase 12)
-├── integrations/
-│   ├── jira.md                        # Jira adapter
-│   └── github-issues.md              # GitHub Issues adapter
-└── templates/
-    ├── config.md                      # Configuration template
-    ├── plans-README.md                # Plans directory README
-    ├── history-README.md              # History directory README
-    └── lessons.md                     # Lessons learned template
-
-.claude/workticket/                    # Per-project data (inside the repo)
-├── config.md                          # Project-specific configuration
-├── plans/                             # Approved plans per ticket
-├── review/
-│   └── lessons.md                     # Lessons from previous retros
-└── history/                           # Execution log per ticket
-```
-
 ## Project Configuration
 
 The file `.claude/workticket/config.md` holds all project-specific settings. It is created automatically during setup. The main sections are:
@@ -255,7 +195,7 @@ The file `.claude/workticket/config.md` holds all project-specific settings. It 
 | Linter | Lint and auto-fix commands | `command: npm run lint` |
 | Build & test | Build, test, and device deploy commands | `test_command: npm test` |
 | PR template | Template, labels, checklist | `template_path: .github/pull_request_template.md` |
-| Knowledge base | Graphify integration | `graphify_enabled: true` |
+| Knowledge base | Optional knowledge-graph backend for the analyze phase | `graphify_enabled` |
 | Changelog | Format and version source | `format: keep-a-changelog` |
 | Git | Commit format, auto-push | `commit_format: [{ticket}] - {description}` |
 
@@ -271,10 +211,6 @@ export JIRA_USER_EMAIL="your-email"
 export JIRA_API_TOKEN="your-api-token"
 ```
 
-### GitHub Issues
-
-No extra configuration needed — uses the GitHub CLI (`gh`).
-
 ## Claude Code Permissions
 
 `npx workticket install` and `npx workticket init` write these; `/workticket setup` (Check 11)
@@ -288,29 +224,6 @@ for the split and the reasoning.
 | Repo | `.claude/settings.local.json` | your project's own binaries, e.g. `Bash(mvn:*)`, `Bash(./gradlew:*)` |
 
 If anything is missing, both `setup` and `doctor` name the exact command that fixes it.
-
-## Development
-
-```bash
-git clone https://github.com/MagellanTV/workticket.git
-cd workticket
-npm test          # 61 tests, no dependencies, builds real git fixtures
-npm pack          # inspect exactly what would be published
-```
-
-The installer has no runtime dependencies: Node 18+ already provides
-`readline/promises`, global `fetch` and `fs`. There is no build step — the source that ships is
-the source that runs. `npm publish` runs the suite first, so a failing build cannot go out.
-
-| Path | What it is |
-|---|---|
-| `bin/workticket.mjs` | CLI entry and command router |
-| `scripts/install.mjs` | machine-level setup |
-| `scripts/init.mjs` | project-level setup |
-| `scripts/doctor.mjs` | checks only, never writes |
-| `scripts/lib/` | settings merge, credentials, detection, config read/write, checks |
-| `scripts/test/run.mjs` | the suite (not published) |
-| `SKILL.md`, `phases/`, `agents/` | the skill Claude Code reads |
 
 ## Quick Reference
 

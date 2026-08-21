@@ -133,12 +133,12 @@ Show: template_path, checklist_auto_check, labels_mapping, path_labels.
 Show: graphify_enabled, graphify_rebuild, codebase_search, claude_md_path.
 
 If developer sets `graphify_enabled: true`:
-1. Check if the graphify CLI is installed: `command -v graphify`
-2. If not installed, do not install it yourself — say: "Run `npx workticket install`, which
-   offers to install it with whichever of uv, pipx or pip3 you have." The package is
-   `graphifyy` on PyPI, not `graphify` or `graphify-cli`; neither of those exists.
-3. After the CLI is available, check for the graph: `test -f graphify-out/graph.json`
-4. If the graph is missing, ask: "Want me to build the graphify graph now?" It can take
+1. Check whether the CLI is available: `command -v graphify`
+2. If it is not, do not install anything yourself — say: "Run `npx workticket install`, which
+   handles it." Leave `graphify_enabled: false` until the CLI is there, since a config flag
+   pointing at a missing binary is just a failing check.
+3. Once the CLI is available, check for the graph: `test -f graphify-out/graph.json`
+4. If the graph is missing, ask: "Want me to build the knowledge graph now?" It can take
    minutes on a large repo, so wait for a yes.
 5. If yes, run: `graphify build` (or the `/graphify` skill if available)
 6. Ask what rebuild command to use and save it to config
@@ -273,11 +273,10 @@ If MISSING: "Review skill '{skill_name}' not found at {skill_path}."
 
 If skill_name is empty: Report "Code review skill: not configured (optional)".
 
-### Check 8: Graphify
+### Check 8: Knowledge graph
 
 Optional — without it the analyze phase falls back to grep, so a missing CLI is a WARN, never
-an ERR. The PyPI package is **`graphifyy`** (two y's) and it ships two binaries, `graphify` and
-`graphify-mcp`.
+an ERR. Report its state; do not offer installation instructions here.
 
 No conditions. No skipping. Run commands 1 and 2 as a single batched call:
 
@@ -291,9 +290,8 @@ graphify build && test -f graphify-out/graph.json && echo "BUILD_SUCCESS" || ech
 ```
 
 **Dashboard mapping:**
-- CLI not found → WARN: "graphify not installed — run `npx workticket install`, or
-  `uv tool install graphifyy` directly". This is optional: the analyze phase falls back to
-  grep, so it is never an ERR.
+- CLI not found → WARN: "knowledge graph not available — run `npx workticket install`, which
+  handles it". Optional: the analyze phase falls back to grep, so this is never an ERR.
 - CLI found + graph found → OK
 - CLI found + graph not found + build succeeded → OK (just built)
 - CLI found + graph not found + build failed → ERR: "graphify build failed"
@@ -412,7 +410,7 @@ After ALL checks complete, present this table:
 | 5  | Linter              | OK/N/A | {command or "not configured"}  |
 | 6  | Test runner         | OK/N/A | {type}: {command}              |
 | 7  | Code review skill   | OK/N/A | {skill_name or "not configured"} |
-| 8  | Graphify            | OK/N/A | {status detail}                |
+| 8  | Knowledge graph     | OK/N/A | {status detail}                |
 | 9  | workticket skill   | OK/ERR | {path}                         |
 | 10 | CLAUDE.md           | OK/ERR | {exists or "created by /init"} |
 | 11 | Claude permissions  | OK/ERR | global: {status}, project: {status} |

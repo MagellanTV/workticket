@@ -179,7 +179,9 @@ async function setupGraphify({ dryRun, assumeYes }) {
     return 'not installed (no installer available)';
   }
 
-  info(`graphify is not installed. It is optional — without it the analyze phase uses grep.`);
+  info('The analyze phase can use a dependency graph of your codebase instead of grep.');
+  info(dim('That needs the graphify CLI, which is not installed. It is entirely optional:'));
+  info(dim('without it the workflow greps, and nothing else changes.'));
   info(dim(`Would run: ${installer.label}`));
 
   if (dryRun) {

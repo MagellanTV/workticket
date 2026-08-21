@@ -2,9 +2,14 @@
 // over grep.
 //
 // The package is `graphifyy` on PyPI (two y's) and it ships two binaries,
-// `graphify` and `graphify-mcp`. The old setup.md told people to run
-// `pip install graphify-cli`, which does not exist on PyPI at all -- that
-// instruction could never have worked.
+// `graphify` and `graphify-mcp`. Neither `graphify` nor `graphify-cli` exists on
+// PyPI, so the name matters -- an earlier version of the docs named the latter
+// and could never have worked.
+//
+// The package name lives here and nowhere in the documentation: the docs
+// describe the capability, not how to obtain the tool. That keeps a public
+// README from directing people to install a third-party package, while the
+// installer can still offer it to someone who wants it.
 //
 // Installing it is optional: without it the workflow falls back to grep. So
 // nothing here installs anything without being asked, and a missing graphify is
