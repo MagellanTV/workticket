@@ -140,7 +140,8 @@ If developer sets `graphify_enabled: true`:
 3. Once the CLI is available, check for the graph: `test -f graphify-out/graph.json`
 4. If the graph is missing, ask: "Want me to build the knowledge graph now?" It can take
    minutes on a large repo, so wait for a yes.
-5. If yes, run: `graphify build` (or the `/graphify` skill if available)
+5. If yes, run: `graphify update .` — that builds the code graph. For docs, papers or
+   images, use the `/graphify` skill instead; that path is a multi-step pipeline, not one command.
 6. Ask what rebuild command to use and save it to config
 
 ### 3.9 Changelog
@@ -286,7 +287,7 @@ echo "=== GRAPHIFY_CLI ===" && (command -v graphify 2>/dev/null && echo "FOUND" 
 
 **Only if CLI is FOUND and graph is NOT_FOUND**, run:
 ```bash
-graphify build && test -f graphify-out/graph.json && echo "BUILD_SUCCESS" || echo "BUILD_FAILED"
+graphify update . && test -f graphify-out/graph.json && echo "BUILD_SUCCESS" || echo "BUILD_FAILED"
 ```
 
 **Dashboard mapping:**
@@ -294,7 +295,7 @@ graphify build && test -f graphify-out/graph.json && echo "BUILD_SUCCESS" || ech
   handles it". Optional: the analyze phase falls back to grep, so this is never an ERR.
 - CLI found + graph found → OK
 - CLI found + graph not found + build succeeded → OK (just built)
-- CLI found + graph not found + build failed → ERR: "graphify build failed"
+- CLI found + graph not found + build failed → ERR: "graphify update failed"
 
 ### Check 9: workticket skill
 

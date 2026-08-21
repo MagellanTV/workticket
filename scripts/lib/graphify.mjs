@@ -114,10 +114,21 @@ export async function install(installer, { timeoutMs = 180000 } = {}) {
 /** Has a graph been built for this project yet? */
 export const hasGraph = (projectDir) => existsSync(join(projectDir, 'graphify-out', 'graph.json'));
 
-/** Build the graph for a project. Can take a while on a large repo. */
+/**
+ * Build or refresh the code graph for a project.
+ *
+ * The subcommand is `update <path>`, not `build` -- there is no `build`, and
+ * calling it failed with "unknown command 'build'" after the developer had
+ * already answered yes. `update` re-extracts code files and writes graph.json,
+ * and it bootstraps one when none exists, with no LLM needed.
+ *
+ * This produces the *code* graph only. The richer semantic graph over docs,
+ * papers and images is a multi-step pipeline that belongs to the /graphify
+ * skill, not to a single CLI call from an installer.
+ */
 export async function build(projectDir, { timeoutMs = 600000 } = {}) {
   try {
-    await exec('graphify', ['build'], { cwd: projectDir, timeout: timeoutMs });
+    await exec('graphify', ['update', projectDir], { cwd: projectDir, timeout: timeoutMs });
     return { ok: hasGraph(projectDir) };
   } catch (err) {
     if (err.killed || err.signal) return { ok: false, error: `timed out after ${timeoutMs / 1000}s` };

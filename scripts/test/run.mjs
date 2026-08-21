@@ -563,6 +563,66 @@ await check('every provider secret is listed as a secret var', () => {
   }
 });
 
+await check('REGRESSION: a trailing comment does not end up inside the value', () => {
+  // The real .jira-env had:
+  //   export JIRA_USER_EMAIL="me@example.com"   # or your Atlassian work email
+  // The old parser kept the quotes and the comment, so Basic auth went out with
+  // a 63-character garbage username and Jira answered 401 -- while `source`-ing
+  // the same file worked, because bash strips the comment.
+  const parsed = parseEnvFile([
+    'export JIRA_BASE_URL="https://x.atlassian.net"',
+    'export JIRA_USER_EMAIL="me@example.com"   # or your Atlassian work email',
+    'export JIRA_API_TOKEN="abc123"  # from id.atlassian.com',
+  ].join('\n'));
+  eq(parsed.JIRA_BASE_URL, 'https://x.atlassian.net', 'url');
+  eq(parsed.JIRA_USER_EMAIL, 'me@example.com', 'email has no quotes and no comment');
+  eq(parsed.JIRA_API_TOKEN, 'abc123', 'token has no quotes and no comment');
+});
+
+await check('a # inside a quoted value is part of the value', () => {
+  const parsed = parseEnvFile('TOKEN="abc#123#xyz"   # a comment\n');
+  eq(parsed.TOKEN, 'abc#123#xyz', 'hash kept inside quotes');
+});
+
+await check('a # in an unquoted value only comments after whitespace', () => {
+  eq(parseEnvFile('A=tok#1\n').A, 'tok#1', 'no whitespace, so no comment');
+  eq(parseEnvFile('A=tok #1\n').A, 'tok', 'whitespace-then-hash starts a comment');
+});
+
+await check('single quotes are honoured and taken literally', () => {
+  const parsed = parseEnvFile("A='v#1'  # note\nB='has \"double\" inside'\n");
+  eq(parsed.A, 'v#1', 'single-quoted value');
+  eq(parsed.B, 'has "double" inside', 'double quotes kept inside single quotes');
+});
+
+await check('backslash escapes are unescaped inside double quotes only', () => {
+  eq(parseEnvFile('A="a\\$b"\n').A, 'a$b', 'escaped dollar unescaped');
+  eq(parseEnvFile("A='a\\$b'\n").A, 'a\\$b', 'single quotes keep the backslash');
+});
+
+await check('an unterminated quote yields what is there instead of throwing', () => {
+  eq(parseEnvFile('A="no closing quote\n').A, 'no closing quote', 'salvaged');
+});
+
+await check('a token written by renderEnvFile round-trips through parseEnvFile', () => {
+  // renderEnvFile escapes ", \, $ and ` for the shell; parseEnvFile has to undo
+  // exactly that, or a token with shell metacharacters silently corrupts.
+  const token = 'tok-$VAR-`cmd`-"q"-\\slash';
+  const parsed = parseEnvFile(renderEnvFile('jira', { JIRA_API_TOKEN: token }));
+  eq(parsed.JIRA_API_TOKEN, token, 'exact round-trip');
+});
+
+await check('REGRESSION: the graph is built with `update`, not `build`', () => {
+  // `graphify build` does not exist -- it failed with "unknown command 'build'"
+  // after the developer had already said yes to building.
+  const src = readFileSync(new URL('../lib/graphify.mjs', import.meta.url), 'utf8');
+  ok(/'update', projectDir/.test(src), 'build() invokes the update subcommand');
+  ok(!/\['build'\]/.test(src), 'no build subcommand anywhere');
+  for (const f of ['../init.mjs', '../lib/checks.mjs']) {
+    ok(!/graphify build/.test(readFileSync(new URL(f, import.meta.url), 'utf8')), `${f} names a real command`);
+  }
+});
+
 console.log('\nNon-interactive behaviour');
 
 await check('InputClosedError carries a stable code the CLI can branch on', () => {

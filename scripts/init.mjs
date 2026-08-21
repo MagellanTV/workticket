@@ -191,15 +191,22 @@ export async function run({ flags = {} } = {}) {
     } else if (graphify.hasGraph(repoRoot)) {
       skipped('graphify-out/graph.json already built.');
     } else if (dryRun) {
-      planned('graphify build');
+      planned('graphify update .');
     } else {
       // Can take minutes on a large repo, so this is opt-in rather than implied.
-      const go = assumeYes ? false : await confirm('Build the graph now? (can take a few minutes)', false);
-      if (!go) skipped('Skipped. Run `graphify build` when you want it.');
-      else {
-        step('Running graphify build');
+      const go = assumeYes ? false : await confirm('Build the code graph now? (can take a few minutes)', false);
+      if (!go) {
+        skipped('Skipped. Run `graphify update .` when you want it.');
+      } else {
+        step('Running graphify update');
         const res = await graphify.build(repoRoot);
-        res.ok ? good('graphify-out/graph.json built') : warn(`Build failed: ${res.error ?? 'unknown error'}`);
+        if (res.ok) {
+          good('graphify-out/graph.json built');
+          info(dim('That is the code graph. For docs, papers and images, run /graphify in Claude Code.'));
+        } else {
+          warn(`Build failed: ${res.error ?? 'unknown error'}`);
+          info(dim('Run `graphify update .` by hand to see the full output.'));
+        }
       }
     }
   }

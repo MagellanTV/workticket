@@ -35,22 +35,53 @@ export const PROVIDERS = {
   },
 };
 
-/** Parse a `.env`-style file into a plain object. Values are not unescaped. */
+/**
+ * Read one value from the right-hand side of a `KEY=` line, the way a shell
+ * would: a quoted value ends at its closing quote and anything after it is a
+ * comment; an unquoted value ends at whitespace-then-#.
+ *
+ * The naive version only unquoted when the value both started and ended with a
+ * quote, so a perfectly ordinary line --
+ *   export JIRA_USER_EMAIL="me@example.com"   # or your work email
+ * -- yielded `"me@example.com"   # or your work email`, quotes and comment
+ * included. That went straight into a Basic auth header and came back 401,
+ * while `source`-ing the same file worked, because bash strips the comment.
+ * A credential silently corrupted by its own comment is a nasty way to lose an
+ * afternoon.
+ */
+function readValue(rest) {
+  const text = rest.trimStart();
+  const quote = text[0];
+  if (quote === '"' || quote === "'") {
+    // Walk to the closing quote, honouring backslash escapes inside "..." only,
+    // matching how the shell treats each quoting style.
+    let value = '';
+    for (let i = 1; i < text.length; i++) {
+      const ch = text[i];
+      if (ch === '\\' && quote === '"' && i + 1 < text.length) {
+        value += text[++i];
+        continue;
+      }
+      if (ch === quote) return value;
+      value += ch;
+    }
+    return value; // unterminated quote: take what there is
+  }
+  // Unquoted: a # only opens a comment when whitespace precedes it, so a value
+  // like tok#1 stays intact.
+  const comment = text.search(/\s#/);
+  return (comment === -1 ? text : text.slice(0, comment)).trim();
+}
+
+/** Parse a `.env`-style file into a plain object. */
 export function parseEnvFile(text) {
   const out = {};
-  for (const raw of text.split('\n')) {
+  for (const raw of String(text ?? '').split('\n')) {
     const line = raw.trim();
     if (!line || line.startsWith('#')) continue;
     const m = line.match(/^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/);
     if (!m) continue;
-    let value = m[2].trim();
-    if (
-      (value.startsWith('"') && value.endsWith('"') && value.length > 1) ||
-      (value.startsWith("'") && value.endsWith("'") && value.length > 1)
-    ) {
-      value = value.slice(1, -1);
-    }
-    out[m[1]] = value;
+    out[m[1]] = readValue(m[2]);
   }
   return out;
 }

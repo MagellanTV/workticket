@@ -183,7 +183,7 @@ export async function checkGraphify(cwd, enabled) {
   if (!state.installed) {
     return warn('graphify', 'Knowledge base', 'graphify not installed', `${GRAPHIFY_INSTALL[0]}   (or: npx workticket install)`);
   }
-  if (!graph) return warn('graphify', 'Knowledge base', `graphify ${state.version ?? ''} ready, graph not built`.replace('  ', ' '), 'graphify build');
+  if (!graph) return warn('graphify', 'Knowledge base', `graphify ${state.version ?? ''} ready, graph not built`.replace('  ', ' '), 'graphify update .');
   return ok('graphify', 'Knowledge base', `graph.json present (graphify ${state.version ?? '?'})`);
 }
 
