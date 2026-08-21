@@ -197,7 +197,7 @@ The file `.claude/workticket/config.md` holds all project-specific settings. It 
 | Section | What it configures | Example |
 |---------|-------------------|---------|
 | Project | Name, language, framework, base branch | `language: TypeScript`, `base_branch: main` |
-| Branch naming | Branch name pattern | `{type}/{username}/{ticket}/{description}` |
+| Branch naming | Branch name pattern | `{type}/{ticket}-{description}` |
 | Ticket system | Provider and credentials | `provider: jira`, `base_url: https://...` |
 | Code review | Custom review skill | `skill_name: my-review-skill` |
 | Linter | Lint and auto-fix commands | `command: npm run lint` |
