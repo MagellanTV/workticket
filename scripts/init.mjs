@@ -20,6 +20,7 @@ import { applyEdits, editsFromDetection, parseConfig, readConfig, setValue } fro
 import { claudeDir } from './lib/paths.mjs';
 import * as graphify from './lib/graphify.mjs';
 import * as prTemplate from './lib/prtemplate.mjs';
+import { writeProjectScaffold } from './lib/claudemd.mjs';
 import { inspectCredentials } from './lib/keys.mjs';
 
 /** Provider assumed when nothing else is specified. */
@@ -256,9 +257,33 @@ export async function run({ flags = {} } = {}) {
     }
   }
 
-  // ---- 6. CLAUDE.md note --------------------------------------------------
-  if (!existsSync(join(repoRoot, 'CLAUDE.md'))) {
-    warn('No CLAUDE.md in this repo. Run /init inside Claude Code -- the workflow reads it for project context.');
+  // ---- 6. CLAUDE.md -------------------------------------------------------
+  step('CLAUDE.md');
+  if (existsSync(join(repoRoot, 'CLAUDE.md'))) {
+    skipped('Already present -- left untouched.');
+  } else {
+    const answers = {
+      projectName: readConfig(configFile)?.project?.name || basename(repoRoot),
+      detected,
+      baseBranch: readConfig(configFile)?.project?.base_branch || '',
+      prTemplate: resolved.path,
+    };
+    // Default to no: a stub is only worth writing if the developer would rather
+    // start from one than from nothing, and /init produces something far better.
+    const go = dryRun || assumeYes || (await confirm('No CLAUDE.md here. Write a scaffold from what was detected?', false));
+    if (!go) {
+      warn('Skipped. Run /init inside Claude Code -- phases 05, 06 and 07 read this for project context.');
+      summary.push(['CLAUDE.md', 'missing']);
+    } else if (dryRun) {
+      planned('write a CLAUDE.md scaffold');
+      summary.push(['CLAUDE.md', 'would scaffold']);
+    } else {
+      const res = writeProjectScaffold(repoRoot, answers);
+      good(`Wrote a scaffold to ${tildify(res.file)}`);
+      info(dim('It records only what was detected. Run /init in Claude Code to replace it with a'));
+      info(dim('real analysis -- the TODO sections are the ones a script cannot fill in.'));
+      summary.push(['CLAUDE.md', 'scaffolded']);
+    }
   }
 
   closePrompts();

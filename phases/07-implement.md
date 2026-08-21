@@ -7,7 +7,9 @@ Follow the approved plan from Phase 06.
 1. Read the file first (never write blind)
 2. Find the closest neighbor pattern in the codebase
 3. If a code review skill is configured (`{config.code_review.skill_name}`), follow its coding standards
-4. Read the project CLAUDE.md for conventions
+4. Read `{config.knowledge.claude_md_path}` (default `CLAUDE.md`) for conventions — use the
+   configured path, not a hardcoded filename, or a project that keeps it elsewhere silently
+   gets none of its own conventions applied
 
 ## Writing comments and text
 

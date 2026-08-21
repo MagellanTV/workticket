@@ -2,14 +2,27 @@
 
 Parallel agents for multi-angle codebase analysis. Count scales with confidence.
 
+Every prompt below must include the project conventions Phase 05 read from
+`{config.knowledge.claude_md_path}`. A subagent starts with no context: it cannot grep its way to
+"we use constructor injection here", so without them it reports whatever pattern it happens to
+find first as the one to follow.
+
+Check for the graph file itself, not just the config flag. `graphify_enabled: true` means the
+CLI is installed; building the graph is a separate opt-in step, so the flag can be true with no
+`graphify-out/graph.json`. Telling an agent the graph exists when it does not sends it to run a
+query against a missing file.
+
 ## Agent 1 — Deep search (always runs)
 
 ```
 Search the {config.project.name} codebase for code related to:
 "{ticket title + key terms}"
 
-{IF config.knowledge.graphify_enabled:}
-IMPORTANT: graphify-out/graph.json exists. Run `graphify query "<question>"` FIRST.
+Project conventions that apply:
+{relevant conventions from config.knowledge.claude_md_path, or "none documented"}
+
+{IF config.knowledge.graphify_enabled AND graphify-out/graph.json exists:}
+IMPORTANT: a dependency graph is available. Run `graphify query "<question>"` FIRST.
 Then `graphify path "<A>" "<B>"` if the ticket involves a flow between concepts.
 {ELSE:}
 Use grep and find to locate relevant code. Search for function names, class names,
@@ -35,7 +48,7 @@ In the {config.project.name} codebase, check for:
 2. Files in the same module/directory that follow a common structure
 3. Any shared utilities or base classes that should be reused
 
-{IF config.knowledge.graphify_enabled:}
+{IF config.knowledge.graphify_enabled AND graphify-out/graph.json exists:}
 Run `graphify query` before grepping.
 {ENDIF}
 
@@ -52,7 +65,7 @@ Trace the root cause of this bug in the {config.project.name} codebase:
 
 Symptom: "{bug description}"
 
-{IF config.knowledge.graphify_enabled:}
+{IF config.knowledge.graphify_enabled AND graphify-out/graph.json exists:}
 Run `graphify query "<symptom>"` first.
 {ENDIF}
 

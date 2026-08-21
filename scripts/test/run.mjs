@@ -18,6 +18,7 @@ import { parseEnvFile, renderEnvFile, PROVIDERS, inspectCredentials } from '../l
 import { InputClosedError, ask, confirm, choose, askSecret, confirmWrite } from '../lib/ui.mjs';
 import * as graphify from '../lib/graphify.mjs';
 import * as prTemplate from '../lib/prtemplate.mjs';
+import { renderProjectScaffold, writeProjectScaffold } from '../lib/claudemd.mjs';
 
 let passed = 0;
 const failures = [];
@@ -868,6 +869,108 @@ await check('a failed fetch reports a reason instead of throwing', async () => {
   const res = await prTemplate.fetchTemplate('https://127.0.0.1:1/nope.md', { timeoutMs: 3000 });
   eq(res.ok, false, 'ok');
   ok(res.error && !/undefined/.test(res.error), `readable error: ${res.error}`);
+});
+
+console.log('\nCLAUDE.md scaffold');
+
+await check('the scaffold records what was detected and nothing more', () => {
+  const md = renderProjectScaffold({
+    projectName: 'svc',
+    detected: { language: 'Java (Maven)', testCommand: 'mvn test', linterCommand: 'mvn checkstyle:check' },
+    baseBranch: 'master',
+    prTemplate: '.github/pull_request_template.md',
+  });
+  ok(md.startsWith('# svc'), 'titled with the project');
+  ok(md.includes('Java (Maven)'), 'stack');
+  ok(md.includes('`mvn test`'), 'test command');
+  ok(md.includes('`master`'), 'base branch');
+  ok(/TODO/.test(md), 'gaps are marked TODO rather than invented');
+  ok(/\/init/.test(md), 'points at the real thing');
+});
+
+await check('nothing is invented when detection found nothing', () => {
+  const md = renderProjectScaffold({ projectName: '', detected: {}, baseBranch: '', prTemplate: '' });
+  ok(md.includes('TODO: not detected'), 'stack marked as not detected');
+  ok(md.includes('TODO: no build or test command detected'), 'commands marked absent');
+  // A confidently wrong CLAUDE.md is worse than a short one: later phases read
+  // it as ground truth.
+  ok(!/npm|mvn|gradle|pytest/.test(md), 'no command guessed out of thin air');
+});
+
+await check('an existing CLAUDE.md is never overwritten', () => {
+  const dir = join(root, 'cmd-exists');
+  mkdirSync(dir, { recursive: true });
+  const original = '# Real analysis\n\nWritten by a human.\n';
+  writeFileSync(join(dir, 'CLAUDE.md'), original);
+  const res = writeProjectScaffold(dir, { projectName: 'x', detected: {}, baseBranch: '', prTemplate: '' });
+  eq(res.wrote, false, 'did not write');
+  eq(res.reason, 'already exists', 'reason');
+  eq(readFileSync(join(dir, 'CLAUDE.md'), 'utf8'), original, 'content untouched');
+});
+
+await check('dry-run writes no file', () => {
+  const dir = join(root, 'cmd-dry');
+  mkdirSync(dir, { recursive: true });
+  const res = writeProjectScaffold(dir, { projectName: 'x', detected: {}, baseBranch: '', prTemplate: '' }, { dryRun: true });
+  eq(res.wrote, false, 'wrote');
+  eq(existsSync(join(dir, 'CLAUDE.md')), false, 'no file on disk');
+});
+
+console.log('\nSkill wiring');
+
+const phase = (name) => readFileSync(new URL(`../../phases/${name}`, import.meta.url), 'utf8');
+const agent = (name) => readFileSync(new URL(`../../agents/${name}`, import.meta.url), 'utf8');
+
+await check('CLAUDE.md is read before the plan is made, not only at implement time', () => {
+  // It used to be read only in Phase 07, so Phase 06 planned without the
+  // project's own conventions and Phase 05's agents never saw them at all.
+  ok(/claude_md_path/.test(phase('05-analyze.md')), 'Phase 05 reads it');
+  ok(/claude_md_path/.test(phase('06-plan.md')), 'Phase 06 plans against it');
+  ok(/claude_md_path/.test(phase('07-implement.md')), 'Phase 07 reads it');
+});
+
+await check('every phase uses the configured path, not a hardcoded filename', () => {
+  for (const f of ['05-analyze.md', '06-plan.md', '07-implement.md', '10-update-knowledge.md']) {
+    const src = phase(f);
+    // A bare "CLAUDE.md" mention outside a code span or a default note would
+    // ignore config.knowledge.claude_md_path.
+    ok(/claude_md_path/.test(src), `${f} references the config field`);
+  }
+});
+
+await check('explore agents are handed the project conventions', () => {
+  // A subagent starts with no context and cannot grep its way to a convention.
+  ok(/claude_md_path/.test(agent('explore-agents.md')), 'agent prompts include them');
+});
+
+await check('the graphify guard checks the graph file, not just the config flag', () => {
+  // graphify_enabled means the CLI is installed; building the graph is a separate
+  // opt-in step. The old guard told agents the graph existed whenever the flag
+  // was set, sending them to query a missing file.
+  for (const f of ['explore-agents.md', 'review-agent.md']) {
+    const src = agent(f);
+    const bare = src.match(/\{IF config\.knowledge\.graphify_enabled:\}/g) ?? [];
+    eq(bare.length, 0, `${f} has no flag-only guard`);
+    ok(/graphify_enabled AND graphify-out\/graph\.json exists/.test(src), `${f} guards on the file too`);
+  }
+});
+
+await check('init fills graphify_rebuild so Phase 10 does not run an empty command', () => {
+  const on = applyEdits(TEMPLATE, editsFromDetection({
+    detected: { name: 'x', language: 'Go', versionSource: 'auto' },
+    projectName: 'x', baseBranch: 'main', provider: 'jira', baseUrl: '', graphifyEnabled: true,
+  }));
+  eq(parseConfig(on.text).knowledge.graphify_rebuild, 'graphify update .', 'filled when enabled');
+
+  const off = applyEdits(TEMPLATE, editsFromDetection({
+    detected: { name: 'x', language: 'Go', versionSource: 'auto' },
+    projectName: 'x', baseBranch: 'main', provider: 'jira', baseUrl: '', graphifyEnabled: false,
+  }));
+  eq(parseConfig(off.text).knowledge.graphify_rebuild, '', 'left empty when disabled');
+});
+
+await check('Phase 10 refuses to run an empty rebuild command', () => {
+  ok(/If that field is empty, skip this step/.test(phase('10-update-knowledge.md')), 'guarded');
 });
 
 console.log('');

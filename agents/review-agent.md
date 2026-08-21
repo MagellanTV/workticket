@@ -20,8 +20,8 @@ Use the {config.code_review.skill_name} skill. Load these references:
 {config.code_review.review_references — list each}
 {ENDIF}
 
-{IF config.knowledge.graphify_enabled:}
-IMPORTANT: graphify-out/graph.json exists. Run `graphify query "<question>"` before reading raw source files.
+{IF config.knowledge.graphify_enabled AND graphify-out/graph.json exists:}
+IMPORTANT: a dependency graph is available. Run `graphify query "<question>"` before reading raw source files.
 {ENDIF}
 
 Tasks:

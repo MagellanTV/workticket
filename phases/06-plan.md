@@ -2,6 +2,11 @@
 
 Re-entry point for the Plan-Approve-Build loop.
 
+The plan must be consistent with `{config.knowledge.claude_md_path}` (default `CLAUDE.md`).
+Phase 05 already read it; carry those conventions into the plan rather than re-deriving them.
+Where the plan departs from a documented convention, say so explicitly and why — a silent
+departure is what gets caught in review after the code is already written.
+
 ## Confidence routing
 
 | Score | Behavior |

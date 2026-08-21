@@ -257,6 +257,10 @@ export function editsFromDetection({ detected, projectName, baseBranch, provider
     { section: 'PR template', key: 'template_path', value: prTemplatePath ?? detected.prTemplate },
     { section: 'Changelog', key: 'version_source', value: detected.versionSource },
     { section: 'Knowledge base', key: 'graphify_enabled', value: graphifyEnabled },
+    // Phase 10 runs this verbatim to refresh the graph. It was never written, so
+    // that step executed an empty bash block and silently did nothing.
+    { section: 'Knowledge base', key: 'graphify_rebuild', value: graphifyEnabled ? 'graphify update .' : '' },
+    { section: 'Knowledge base', key: 'codebase_search', value: graphifyEnabled ? 'graphify' : 'grep' },
   ];
 }
 
