@@ -79,8 +79,13 @@ device_verify:
 
 ## PR template
 
+The organisation default is fetched by `npx workticket init` and cached at
+`.claude/workticket/pr-template.md`. A template committed in the repo wins over it,
+the same way GitHub resolves a repo template over its org default.
+
 ```yaml
-template_path: ".github/pull_request_template.md"  # path relative to repo root
+template_url: "https://raw.githubusercontent.com/MagellanTV/.github/main/PULL_REQUEST_TEMPLATE.md"
+template_path: ""               # resolved by init; repo template if present, else the cache
 checklist_auto_check: []        # items to pre-check (by substring match)
 labels_mapping:
   bug: ["bug"]

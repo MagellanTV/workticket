@@ -17,6 +17,7 @@ import { parseConfig, parseBlock, setValue, applyEdits, editsFromDetection, extr
 import { parseEnvFile, renderEnvFile, PROVIDERS, inspectCredentials } from '../lib/keys.mjs';
 import { InputClosedError, ask, confirm, choose, askSecret, confirmWrite } from '../lib/ui.mjs';
 import * as graphify from '../lib/graphify.mjs';
+import * as prTemplate from '../lib/prtemplate.mjs';
 
 let passed = 0;
 const failures = [];
@@ -730,6 +731,83 @@ await check('inspect reports a boolean even when the CLI is absent', async () =>
   const state = await graphify.inspect();
   eq(typeof state.installed, 'boolean', 'installed is a boolean');
   ok(state.installed === false || state.version === null || typeof state.version === 'string', 'version shape');
+});
+
+console.log('\nPR template');
+
+await check('a github blob URL is rewritten to the raw host', () => {
+  // Only raw.githubusercontent.com serves file contents; github.com/blob serves
+  // HTML. A blob URL is what a person copies from the browser, so accept it.
+  eq(
+    prTemplate.toRawUrl('https://github.com/MagellanTV/.github/blob/main/PULL_REQUEST_TEMPLATE.md'),
+    'https://raw.githubusercontent.com/MagellanTV/.github/main/PULL_REQUEST_TEMPLATE.md',
+    'blob rewritten',
+  );
+});
+
+await check('a raw URL is left alone, and so is anything unrecognised', () => {
+  eq(prTemplate.toRawUrl(prTemplate.DEFAULT_TEMPLATE_URL), prTemplate.DEFAULT_TEMPLATE_URL, 'raw untouched');
+  eq(prTemplate.toRawUrl('https://example.com/t.md'), 'https://example.com/t.md', 'other host untouched');
+  eq(prTemplate.toRawUrl(''), '', 'empty');
+});
+
+await check('the shipped default points at the raw host, not a blob URL', () => {
+  ok(
+    prTemplate.DEFAULT_TEMPLATE_URL.startsWith('https://raw.githubusercontent.com/'),
+    `default must be fetchable as-is: ${prTemplate.DEFAULT_TEMPLATE_URL}`,
+  );
+});
+
+await check('the template default is in the shipped config', () => {
+  const cfg = parseConfig(TEMPLATE).pr_template;
+  eq(cfg.template_url, prTemplate.DEFAULT_TEMPLATE_URL, 'url matches the module default');
+  eq(cfg.template_path, '', 'path is left for init to resolve');
+});
+
+await check('a committed repo template wins over the org default', () => {
+  const dir = join(root, 'prt-repo');
+  const data = join(dir, '.claude', 'workticket');
+  mkdirSync(join(dir, '.github'), { recursive: true });
+  mkdirSync(data, { recursive: true });
+  writeFileSync(join(dir, '.github', 'pull_request_template.md'), '## Ours');
+  writeFileSync(join(data, prTemplate.CACHE_FILENAME), '## Org');
+  const res = prTemplate.resolve(dir, data, '.github/pull_request_template.md');
+  eq(res, { source: 'repo', path: '.github/pull_request_template.md' }, 'repo wins');
+});
+
+await check('the cached org default is used when the repo has none', () => {
+  const dir = join(root, 'prt-cache');
+  const data = join(dir, '.claude', 'workticket');
+  mkdirSync(data, { recursive: true });
+  writeFileSync(join(data, prTemplate.CACHE_FILENAME), '## Org');
+  const res = prTemplate.resolve(dir, data, '');
+  eq(res.source, 'cache', 'source');
+  // Repo-relative so config.md stays portable across machines.
+  eq(res.path, '.claude/workticket/pr-template.md', 'path is repo-relative');
+});
+
+await check('resolve reports none rather than a path that does not exist', () => {
+  const dir = join(root, 'prt-none');
+  mkdirSync(join(dir, '.claude', 'workticket'), { recursive: true });
+  eq(prTemplate.resolve(dir, join(dir, '.claude', 'workticket'), '.github/nope.md').source, 'none', 'source');
+});
+
+await check('cacheTemplate writes the content verbatim', () => {
+  const data = join(root, 'prt-write', '.claude', 'workticket');
+  const body = '## Ticket\n\nVRT-1\n';
+  const file = prTemplate.cacheTemplate(data, body);
+  eq(readFileSync(file, 'utf8'), body, 'written verbatim');
+});
+
+await check('sections lists the headings that give the template its shape', () => {
+  const heads = prTemplate.sections('# Title\n## Ticket\ntext\n## Testing Steps\n### Sub\n');
+  eq(heads, ['Ticket', 'Testing Steps'], 'only level-two headings');
+});
+
+await check('a failed fetch reports a reason instead of throwing', async () => {
+  const res = await prTemplate.fetchTemplate('https://127.0.0.1:1/nope.md', { timeoutMs: 3000 });
+  eq(res.ok, false, 'ok');
+  ok(res.error && !/undefined/.test(res.error), `readable error: ${res.error}`);
 });
 
 console.log('');

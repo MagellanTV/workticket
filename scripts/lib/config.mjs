@@ -243,7 +243,7 @@ export function applyEdits(markdown, edits) {
 }
 
 /** Turn detectProject() output plus answers into config.md edits. */
-export function editsFromDetection({ detected, projectName, baseBranch, provider, baseUrl, graphifyEnabled }) {
+export function editsFromDetection({ detected, projectName, baseBranch, provider, baseUrl, graphifyEnabled, prTemplatePath }) {
   return [
     { section: 'Project', key: 'name', value: projectName || detected.name },
     { section: 'Project', key: 'language', value: detected.language },
@@ -254,7 +254,7 @@ export function editsFromDetection({ detected, projectName, baseBranch, provider
     { section: 'Linter / static analysis', key: 'fix_command', value: detected.linterFixCommand },
     { section: 'Build & test', key: 'test_command', value: detected.testCommand },
     { section: 'Build & test', key: 'test_type', value: detected.testType },
-    { section: 'PR template', key: 'template_path', value: detected.prTemplate },
+    { section: 'PR template', key: 'template_path', value: prTemplatePath ?? detected.prTemplate },
     { section: 'Changelog', key: 'version_source', value: detected.versionSource },
     { section: 'Knowledge base', key: 'graphify_enabled', value: graphifyEnabled },
   ];

@@ -168,7 +168,18 @@ Never use `git add -A` or `git add .`.
 
 ## Step 5: Draft PR body
 
-1. Read the PR template from `{config.pr_template.template_path}` if it exists
+1. Read the PR template from `{config.pr_template.template_path}` if it exists.
+
+   **The template is a filled-in example, not a blank form.** Its sections ship with sample
+   prose from an unrelated ticket — a "My List" screen, ticket VRT-1234, platform rows already
+   checked off. Keep the headings and replace every line of content under them with facts about
+   *this* change. Never leave a sample sentence, a sample ticket ID, or a pre-checked platform
+   box in the body: a reviewer reading a checked "Tested on Roku Ultra" that nobody tested is
+   worse than an empty section.
+
+   For a checklist item you cannot substantiate, leave it unchecked and say why, or drop the
+   row. For an optional section with nothing to report, remove the section rather than restating
+   the example.
 2. Draft the PR title and body following the writing style rules below
 3. Run the tone check (`agents/tone-review-agent.md`) on the full PR body. Fix flagged items
    silently and re-check once

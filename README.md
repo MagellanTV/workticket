@@ -41,8 +41,16 @@ npx workticket init
 
 This creates `.claude/workticket/` with a `config.md` pre-filled from what the repo actually
 contains (it reads `pom.xml`, `build.gradle`, `package.json`, `pyproject.toml`, `go.mod` or a Roku
-`manifest` to work out the stack, linter, test command and version source), updates `.gitignore`,
-and scopes the workflow's permissions to that repo.
+`manifest` to work out the stack, linter, test command and version source), fetches the
+organisation's pull-request template, updates `.gitignore`, and scopes the workflow's permissions
+to that repo.
+
+The PR template comes from `pr_template.template_url`, which defaults to the MagellanTV org
+template. `init` fetches it once and caches it at `.claude/workticket/pr-template.md`, so
+creating a PR never depends on the network. A template committed in the repo
+(`.github/pull_request_template.md`) overrides it, the same way GitHub resolves a repo template
+over its org default. Point `template_url` at your own file to change the default; if the fetch
+fails, setup carries on and says so — a missing template does not block a PR.
 
 Both commands are idempotent — re-running them reports "already present" and writes nothing. Add
 `--dry-run` to see every change without making it.

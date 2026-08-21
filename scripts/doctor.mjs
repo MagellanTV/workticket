@@ -8,7 +8,7 @@ import { readConfig } from './lib/config.mjs';
 import {
   checkGit, checkBaseBranch, checkGitHubCli, checkTicketSystem, checkCommand,
   checkReviewSkill, checkGraphify, checkSkillInstalled, checkProjectClaudeMd,
-  checkPermissions, checkDynamicCommands, checkCredentialFileModes, counts,
+  checkPermissions, checkDynamicCommands, checkCredentialFileModes, checkPrTemplate, counts,
 } from './lib/checks.mjs';
 
 const STATUS = { ok: OK, warn: WARN, err: ERR, skip: SKIP };
@@ -44,6 +44,7 @@ export async function run({ flags = {} } = {}) {
   rows.push(await checkGraphify(repoRoot ?? cwd, Boolean(config?.knowledge?.graphify_enabled)));
 
   if (repoRoot) {
+    rows.push(checkPrTemplate(repoRoot, config));
     rows.push(checkProjectClaudeMd(repoRoot));
     const perms = checkPermissions(repoRoot);
     rows.push(...perms.rows);

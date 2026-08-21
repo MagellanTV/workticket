@@ -92,7 +92,8 @@ All project-specific values come from `.claude/workticket/config.md`. Read it at
 | `code_review.skill_name` | Phase 03, 08 (which skill for review) | `my-review-skill` |
 | `linter.command` | Phase 08 Track A | `npm run lint` |
 | `build_test.test_command` | Phase 08 Track D | `npm test` |
-| `pr_template.template_path` | Phase 11 | `.github/pull_request_template.md` |
+| `pr_template.template_url` | Phase 11 (fetched by `init`) | org default |
+| `pr_template.template_path` | Phase 11 | resolved by `init` |
 | `changelog.enabled` | Phase 11 | `true` |
 | `changelog.file` | Phase 11 | `CHANGELOG.md` |
 | `changelog.version_source` | Phase 11 | `auto` |

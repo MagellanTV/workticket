@@ -16,9 +16,10 @@ import {
 import { detectProject, installedSkills } from './lib/detect.mjs';
 import { applyGitignore } from './lib/project.mjs';
 import { applySettings, renderPlan, PROJECT_PERMISSIONS, uncoveredCommands, readSettings } from './lib/settings.mjs';
-import { applyEdits, editsFromDetection, parseConfig, readConfig } from './lib/config.mjs';
+import { applyEdits, editsFromDetection, parseConfig, readConfig, setValue } from './lib/config.mjs';
 import { claudeDir } from './lib/paths.mjs';
 import * as graphify from './lib/graphify.mjs';
+import * as prTemplate from './lib/prtemplate.mjs';
 import { inspectCredentials } from './lib/keys.mjs';
 
 /** Provider assumed when nothing else is specified. */
@@ -132,6 +133,40 @@ export async function run({ flags = {} } = {}) {
     }
     summary.push(['Config', dryRun ? 'would write' : `${res.applied.length} value(s) written`]);
   }
+
+  // ---- 2b. PR template ----------------------------------------------------
+  step('PR template');
+  const templateUrl = readConfig(configFile)?.pr_template?.template_url || prTemplate.DEFAULT_TEMPLATE_URL;
+  let resolved = prTemplate.resolve(repoRoot, dataDir, detected.prTemplate);
+
+  if (resolved.source === 'repo') {
+    good(`Using the template committed in this repo: ${resolved.path}`);
+    info(dim('A repo template overrides the organisation default, as it does on GitHub.'));
+  } else if (dryRun) {
+    planned(`fetch ${templateUrl} into ${tildify(join(dataDir, prTemplate.CACHE_FILENAME))}`);
+  } else {
+    const res = await prTemplate.fetchTemplate(templateUrl);
+    if (res.ok) {
+      const file = prTemplate.cacheTemplate(dataDir, res.content);
+      const heads = prTemplate.sections(res.content);
+      good(`Cached the organisation template (${heads.length} sections) at ${tildify(file)}`);
+      info(dim(heads.join(', ')));
+      resolved = prTemplate.resolve(repoRoot, dataDir, detected.prTemplate);
+    } else {
+      // Optional: Phase 11 can still open a PR, just without a template.
+      warn(`Could not fetch the template -- ${res.error}`);
+      info(dim(`URL: ${res.url}`));
+      info(dim('Re-run init once you are online, or set pr_template.template_path by hand.'));
+    }
+  }
+
+  // Point the config at whatever actually resolved.
+  if (!dryRun && resolved.path) {
+    const current = readFileSync(configFile, 'utf8');
+    const upd = setValue(current, 'PR template', 'template_path', resolved.path);
+    if (upd.applied) writeFileSync(configFile, upd.text, 'utf8');
+  }
+  summary.push(['PR template', resolved.source === 'none' ? 'unavailable' : `${resolved.source}: ${resolved.path || '-'}`]);
 
   // ---- 3. .gitignore ------------------------------------------------------
   step('.gitignore');

@@ -187,6 +187,19 @@ export async function checkGraphify(cwd, enabled) {
   return ok('graphify', 'Knowledge base', `graph.json present (graphify ${state.version ?? '?'})`);
 }
 
+/** Which PR template Phase 11 will actually use. */
+export function checkPrTemplate(repoRoot, config) {
+  const configured = config?.pr_template?.template_path ?? '';
+  if (!configured) {
+    return warn('pr-template', 'PR template', 'none resolved', 'workticket init   (fetches the org default)');
+  }
+  if (!existsSync(join(repoRoot, configured))) {
+    return err('pr-template', 'PR template', `${configured} is missing`, 'workticket init   (re-fetches it)');
+  }
+  const kind = configured.startsWith('.claude/workticket/') ? 'org default' : 'committed in this repo';
+  return ok('pr-template', 'PR template', `${configured} (${kind})`);
+}
+
 export function checkSkillInstalled() {
   const file = join(skillInstallDir(), 'SKILL.md');
   return existsSync(file)
