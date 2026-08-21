@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execFileSync } from 'node:child_process';
 
-import { planGitignore, applyGitignore, inspectLegacy, migrateLegacy, dataCounts, isTracked } from '../lib/project.mjs';
+import { planGitignore, applyGitignore, dataCounts } from '../lib/project.mjs';
 import { detectProject } from '../lib/detect.mjs';
 import { tildify, findRepoRoot } from '../lib/paths.mjs';
 import {
@@ -44,7 +44,7 @@ const ok = (cond, msg) => {
 const root = mkdtempSync(join(tmpdir(), 'workticket-test-'));
 const git = (cwd, ...args) => execFileSync('git', args, { cwd, stdio: 'ignore' });
 
-/** A git repo with a legacy .claude/alfred-code/ tree. */
+/** A git repo with a populated .claude/workticket/ tree. */
 function fixture(name, { track = false, gitignore = null, extraFiles = {} } = {}) {
   const dir = join(root, name);
   mkdirSync(dir, { recursive: true });
@@ -53,14 +53,14 @@ function fixture(name, { track = false, gitignore = null, extraFiles = {} } = {}
   git(dir, 'config', 'user.name', 'Test');
 
   for (const sub of ['plans', 'history', 'review']) {
-    mkdirSync(join(dir, '.claude', 'alfred-code', sub), { recursive: true });
+    mkdirSync(join(dir, '.claude', 'workticket', sub), { recursive: true });
   }
-  const legacy = join(dir, '.claude', 'alfred-code');
-  writeFileSync(join(legacy, 'config.md'), '# Alfred-code — Project Configuration\nbase_branch: main\n');
-  writeFileSync(join(legacy, 'plans', 'PROJ-1-v1.md'), 'saved to .claude/alfred-code/plans/PROJ-1-v1.md\n');
-  writeFileSync(join(legacy, 'plans', 'README.md'), 'readme\n');
-  writeFileSync(join(legacy, 'history', 'PROJ-1.md'), 'ran ~/.claude/skills/alfred-code/SKILL.md\n');
-  writeFileSync(join(legacy, 'review', 'lessons.md'), 'lesson from alfred-code\n');
+  const data = join(dir, '.claude', 'workticket');
+  writeFileSync(join(data, 'config.md'), '# Workticket — Project Configuration\nbase_branch: main\n');
+  writeFileSync(join(data, 'plans', 'PROJ-1-v1.md'), 'saved to .claude/workticket/plans/PROJ-1-v1.md\n');
+  writeFileSync(join(data, 'plans', 'README.md'), 'readme\n');
+  writeFileSync(join(data, 'history', 'PROJ-1.md'), 'ran the workflow\n');
+  writeFileSync(join(data, 'review', 'lessons.md'), 'a lesson\n');
 
   for (const [rel, content] of Object.entries(extraFiles)) {
     const p = join(dir, rel);
@@ -80,20 +80,6 @@ function fixture(name, { track = false, gitignore = null, extraFiles = {} } = {}
   }
   return dir;
 }
-
-const noAlfred = (dir) => {
-  const hits = [];
-  const walk = (d) => {
-    for (const e of readdirSync(d, { withFileTypes: true })) {
-      if (e.name === '.git') continue;
-      const p = join(d, e.name);
-      if (e.isDirectory()) walk(p);
-      else if (/alfred/i.test(readFileSync(p, 'utf8'))) hits.push(p);
-    }
-  };
-  walk(dir);
-  return hits;
-};
 
 console.log('\nGitignore planning');
 
@@ -117,103 +103,11 @@ await check('preserves unrelated user entries', () => {
   ok(p.next.includes('.claude/workticket/plans/'), 'new entry appended');
 });
 
-await check('rewrites legacy alfred-code lines in place, no duplicates', () => {
-  const legacy = '# alfred-code workflow data\n.claude/alfred-code/plans/\n.claude/alfred-code/history/\n.claude/alfred-code/review/\n\n# graphify output\ngraphify-out/\n';
-  const p = planGitignore(legacy);
-  ok(!p.next.includes('alfred-code'), 'no alfred-code left');
-  eq(p.missing, [], 'nothing missing after rewrite');
-  eq((p.next.match(/\.claude\/workticket\/plans\//g) || []).length, 1, 'plans entry count');
-  eq((p.next.match(/# workticket workflow data/g) || []).length, 1, 'header count');
-});
-
 await check('does not duplicate a header that already exists', () => {
   const partial = '# workticket workflow data\n.claude/workticket/plans/\n';
   const p = planGitignore(partial);
   eq((p.next.match(/# workticket workflow data/g) || []).length, 1, 'header count');
   ok(p.next.includes('.claude/workticket/history/'), 'missing entry added');
-});
-
-console.log('\nLegacy migration');
-
-await check('CASE A: tracked legacy dir migrates via git mv, history preserved', () => {
-  const dir = fixture('a', {
-    track: true,
-    gitignore: '# alfred-code workflow data\n.claude/alfred-code/plans/\n',
-  });
-  ok(isTracked(dir, '.claude/alfred-code'), 'fixture should be tracked');
-  eq(inspectLegacy(dir).status, 'migrate', 'status');
-
-  const res = migrateLegacy(dir);
-  eq(res.method, 'git mv', 'method');
-  ok(existsSync(join(dir, '.claude', 'workticket', 'config.md')), 'config moved');
-  ok(!existsSync(join(dir, '.claude', 'alfred-code')), 'legacy dir gone');
-
-  const status = execFileSync('git', ['status', '--porcelain'], { cwd: dir }).toString();
-  ok(/^R/m.test(status), `git should record renames, got:\n${status}`);
-
-  applyGitignore(dir);
-  eq(noAlfred(dir), [], 'no alfred references anywhere');
-
-  const cfg = readFileSync(join(dir, '.claude', 'workticket', 'config.md'), 'utf8');
-  ok(cfg.startsWith('# Workticket'), `config header rewritten, got: ${cfg.split('\n')[0]}`);
-});
-
-await check('CASE B: untracked legacy dir migrates via plain rename', () => {
-  const dir = fixture('b', { track: false, gitignore: 'node_modules/\n' });
-  const res = migrateLegacy(dir);
-  eq(res.method, 'mv', 'method');
-  ok(existsSync(join(dir, '.claude', 'workticket', 'review', 'lessons.md')), 'lessons moved');
-  applyGitignore(dir);
-  eq(noAlfred(dir), [], 'no alfred references');
-});
-
-await check('CASE C: no .gitignore at all', () => {
-  const dir = fixture('c', { track: false, gitignore: null });
-  migrateLegacy(dir);
-  const res = applyGitignore(dir);
-  eq(res.created, true, 'created .gitignore');
-  ok(readFileSync(join(dir, '.gitignore'), 'utf8').includes('graphify-out/'), 'entries written');
-});
-
-await check('CASE D: nothing to migrate is a no-op', () => {
-  const dir = fixture('d', { track: false });
-  rmSync(join(dir, '.claude', 'alfred-code'), { recursive: true });
-  mkdirSync(join(dir, '.claude', 'workticket'), { recursive: true });
-  eq(inspectLegacy(dir).status, 'current-only', 'status');
-  const res = migrateLegacy(dir);
-  eq(res.moved, false, 'moved');
-});
-
-await check('CASE E: both dirs present is a conflict, never auto-merged', () => {
-  const dir = fixture('e', { track: false });
-  mkdirSync(join(dir, '.claude', 'workticket'), { recursive: true });
-  writeFileSync(join(dir, '.claude', 'workticket', 'config.md'), '# Workticket\nnew\n');
-  eq(inspectLegacy(dir).status, 'conflict', 'status');
-  const res = migrateLegacy(dir);
-  eq(res.moved, false, 'must not move');
-  ok(existsSync(join(dir, '.claude', 'alfred-code')), 'legacy dir untouched');
-  ok(res.legacyFiles.length > 0 && res.currentFiles.length > 0, 'both sides listed for the developer');
-});
-
-await check('dry-run touches nothing but reports the method', () => {
-  const dir = fixture('f', { track: true, gitignore: '.claude/alfred-code/plans/\n' });
-  const res = migrateLegacy(dir, { dryRun: true });
-  eq(res.moved, false, 'moved');
-  eq(res.method, 'git mv', 'method still reported');
-  ok(existsSync(join(dir, '.claude', 'alfred-code')), 'legacy dir still there');
-  const gi = applyGitignore(dir, { dryRun: true });
-  eq(gi.wrote, false, 'gitignore not written');
-  ok(readFileSync(join(dir, '.gitignore'), 'utf8').includes('alfred-code'), 'file unchanged on disk');
-});
-
-await check('binary files are left alone during rewrite', () => {
-  const dir = fixture('g', { track: false });
-  const bin = join(dir, '.claude', 'alfred-code', 'blob.bin');
-  const payload = Buffer.from([0x00, 0x01, 0x61, 0x6c, 0x66, 0x72, 0x65, 0x64, 0x2d, 0x63, 0x6f, 0x64, 0x65, 0x00]);
-  writeFileSync(bin, payload);
-  migrateLegacy(dir);
-  const after = readFileSync(join(dir, '.claude', 'workticket', 'blob.bin'));
-  eq([...after], [...payload], 'binary bytes unchanged');
 });
 
 console.log('\nProject detection');
@@ -298,9 +192,7 @@ await check('findRepoRoot locates the enclosing repo', () => {
 
 await check('dataCounts ignores READMEs', () => {
   const dir = fixture('dc', { track: false });
-  migrateLegacy(dir);
-  const counts = dataCounts(join(dir, '.claude', 'workticket'));
-  eq(counts, { plans: 1, history: 1 }, 'counts');
+  eq(dataCounts(join(dir, '.claude', 'workticket')), { plans: 1, history: 1 }, 'counts');
 });
 
 console.log('\nSettings merge');

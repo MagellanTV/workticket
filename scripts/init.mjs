@@ -1,8 +1,8 @@
 // `workticket init` -- project-level setup, run once per repo.
 //
 // Creates .claude/workticket/ with a config pre-filled from what the repo
-// actually contains, migrates a legacy alfred-code directory, updates
-// .gitignore, and scopes the workflow's permissions to this project.
+// actually contains, updates .gitignore, and scopes the workflow's permissions
+// to this project.
 
 import { existsSync, mkdirSync, cpSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -14,7 +14,7 @@ import {
   packageRoot, skillInstallDir, findRepoRoot, projectDataDir, tildify,
 } from './lib/paths.mjs';
 import { detectProject, installedSkills } from './lib/detect.mjs';
-import { applyGitignore, inspectLegacy, migrateLegacy, dataCounts } from './lib/project.mjs';
+import { applyGitignore } from './lib/project.mjs';
 import { applySettings, renderPlan, PROJECT_PERMISSIONS, uncoveredCommands, readSettings } from './lib/settings.mjs';
 import { applyEdits, editsFromDetection, parseConfig, readConfig } from './lib/config.mjs';
 import { claudeDir } from './lib/paths.mjs';
@@ -59,40 +59,11 @@ export async function run({ flags = {} } = {}) {
   const configFile = join(dataDir, 'config.md');
   const summary = [];
 
-  // ---- 1. Legacy migration ------------------------------------------------
-  const legacy = inspectLegacy(repoRoot);
-  if (legacy.status === 'conflict') {
-    step('Legacy directory');
-    fail('Both .claude/alfred-code/ and .claude/workticket/ exist.');
-    console.log('');
-    info(`${bold('.claude/alfred-code/')} (${legacy.legacyFiles.length} files)`);
-    legacy.legacyFiles.slice(0, 12).forEach((f) => info(dim(`  ${f}`)));
-    info(`${bold('.claude/workticket/')} (${legacy.currentFiles.length} files)`);
-    legacy.currentFiles.slice(0, 12).forEach((f) => info(dim(`  ${f}`)));
-    console.log('');
-    info('Refusing to merge two configs. Copy across whatever you want to keep,');
-    info('remove .claude/alfred-code/, then run init again.');
-    return 1;
-  }
-
-  if (legacy.status === 'migrate') {
-    step('Migrating .claude/alfred-code/');
-    const res = migrateLegacy(repoRoot, { dryRun });
-    if (dryRun) {
-      planned(`${res.method} .claude/alfred-code -> .claude/workticket, then rewrite stale paths`);
-    } else {
-      const counts = dataCounts(dataDir);
-      good(`Moved with ${res.method} -- ${counts.plans} plan(s), ${counts.history} history entr(ies), lessons preserved`);
-      if (res.rewrote.length) info(dim(`Rewrote paths in ${res.rewrote.length} file(s)`));
-    }
-    summary.push(['Migration', dryRun ? `would use ${res.method}` : `done via ${res.method}`]);
-  }
-
-  // A config that survived migration, or that a previous init wrote, belongs to
-  // the developer. Record that before the template copy below creates one.
+  // A config a previous init wrote, or that the developer hand-tuned, is theirs.
+  // Record that before the template copy below creates one.
   const configPreexisted = existsSync(configFile);
 
-  // ---- 2. Data directory --------------------------------------------------
+  // ---- 1. Data directory --------------------------------------------------
   step('Project data directory');
   const templates = templateDir();
   const created = [];
@@ -113,7 +84,7 @@ export async function run({ flags = {} } = {}) {
   }
   summary.push(['Data directory', created.length ? `${created.length} file(s) created` : 'already present']);
 
-  // ---- 3. Config ----------------------------------------------------------
+  // ---- 2. Config ----------------------------------------------------------
   step('Detecting the project');
   const detected = detectProject(repoRoot);
   table(
@@ -128,8 +99,8 @@ export async function run({ flags = {} } = {}) {
   );
 
   if (configPreexisted) {
-    // Never overwrite a config the developer already has -- it may hold tuned
-    // values, and after a migration it holds their whole previous setup.
+    // Never overwrite a config the developer already has -- it may hold values
+    // they tuned by hand.
     skipped(`${tildify(configFile)} already exists -- leaving it untouched.`);
     const existing = readConfig(configFile);
     const sections = existing ? Object.keys(existing).length : 0;
@@ -162,24 +133,19 @@ export async function run({ flags = {} } = {}) {
     summary.push(['Config', dryRun ? 'would write' : `${res.applied.length} value(s) written`]);
   }
 
-  // ---- 4. .gitignore ------------------------------------------------------
+  // ---- 3. .gitignore ------------------------------------------------------
   step('.gitignore');
   const gi = applyGitignore(repoRoot, { dryRun });
   if (!gi.changed) {
     skipped('Already excludes the workflow artifacts.');
   } else if (dryRun) {
-    planned(
-      `${gi.created ? 'create' : 'update'} .gitignore` +
-        (gi.legacyLines.length ? ` (rewrite ${gi.legacyLines.length} legacy line(s))` : '') +
-        (gi.missing.length ? ` and add ${gi.missing.length} entr(ies)` : ''),
-    );
+    planned(`${gi.created ? 'create' : 'update'} .gitignore, adding ${gi.missing.length} entr(ies)`);
   } else {
-    if (gi.legacyLines.length) good(`Rewrote ${gi.legacyLines.length} legacy alfred-code line(s)`);
-    if (gi.missing.length) good(`Added ${gi.missing.length} entr(ies)`);
+    good(`${gi.created ? 'Created .gitignore with' : 'Added'} ${gi.missing.length} entr(ies)`);
   }
   summary.push(['.gitignore', gi.changed ? (dryRun ? 'would update' : 'updated') : 'already correct']);
 
-  // ---- 5. Knowledge graph (optional) -------------------------------------
+  // ---- 4. Knowledge graph (optional) -------------------------------------
   const wantsGraph = Boolean(readConfig(configFile)?.knowledge?.graphify_enabled);
   if (wantsGraph) {
     step('Knowledge graph');
@@ -203,7 +169,7 @@ export async function run({ flags = {} } = {}) {
     }
   }
 
-  // ---- 6. Project permissions --------------------------------------------
+  // ---- 5. Project permissions --------------------------------------------
   step('Project permissions');
   const settingsFile = join(repoRoot, '.claude', 'settings.local.json');
   const config = existsSync(configFile) ? readConfig(configFile) : null;

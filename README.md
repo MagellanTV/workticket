@@ -42,8 +42,7 @@ npx workticket init
 This creates `.claude/workticket/` with a `config.md` pre-filled from what the repo actually
 contains (it reads `pom.xml`, `build.gradle`, `package.json`, `pyproject.toml`, `go.mod` or a Roku
 `manifest` to work out the stack, linter, test command and version source), updates `.gitignore`,
-migrates a legacy `.claude/alfred-code/` directory if it finds one, and scopes the workflow's
-permissions to that repo.
+and scopes the workflow's permissions to that repo.
 
 Both commands are idempotent — re-running them reports "already present" and writes nothing. Add
 `--dry-run` to see every change without making it.
@@ -113,24 +112,6 @@ the registration to `~/.claude/CLAUDE.md` by hand:
 ```
 
 You will then need to add the permission rules yourself, or accept a prompt per file write.
-
-### Upgrading from `alfred-code`
-
-This skill was previously named `alfred-code`. If you have the old version installed:
-
-1. Remove the old skill directory: `rm -rf ~/.claude/skills/alfred-code/`
-2. Run `npx workticket install` to register the new one.
-
-Your **projects need no manual work**. Run `npx workticket init` in each repo, or just start the
-workflow — both paths detect a legacy `.claude/alfred-code/` directory and migrate it in place:
-`git mv` when the directory is tracked (so file history follows the rename), plain `mv` otherwise.
-The config, every plan, every history entry, and `lessons.md` are preserved, path references
-inside those files are rewritten, and the stale `.gitignore` entries are replaced. A config you
-already had is never overwritten.
-
-If a project somehow ends up with *both* `.claude/alfred-code/` and `.claude/workticket/`, the
-workflow stops and asks which to keep rather than merging them — nothing is deleted without your
-explicit confirmation.
 
 ## Usage
 

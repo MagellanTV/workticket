@@ -6,8 +6,7 @@ through the parts that need judgement.
 ## What this file does NOT do
 
 Creating directories, copying templates, editing `.gitignore`, merging permission rules,
-writing credential files and migrating a legacy `.claude/alfred-code/` directory all belong to
-the installer, not here:
+and writing credential files all belong to the installer, not here:
 
 ```bash
 npx workticket init
@@ -48,14 +47,13 @@ reduce the number of tool invocations. The checks below show the batched form.
 ## Step 0: Confirm the installer has run
 
 ```bash
-echo "=== DATA_DIR ===" && test -d .claude/workticket && echo "EXISTS" || echo "MISSING" && echo "=== CONFIG ===" && test -f .claude/workticket/config.md && echo "EXISTS" || echo "MISSING" && echo "=== LEGACY ===" && test -d .claude/alfred-code && echo "EXISTS" || echo "NONE"
+echo "=== DATA_DIR ===" && test -d .claude/workticket && echo "EXISTS" || echo "MISSING" && echo "=== CONFIG ===" && test -f .claude/workticket/config.md && echo "EXISTS" || echo "MISSING"
 ```
 
 | Result | Action |
 |---|---|
 | CONFIG EXISTS | Continue to Step 1 |
-| CONFIG MISSING, LEGACY NONE | Tell the developer: "Run `npx workticket init` first — it creates the config from what this repo actually contains." Stop. |
-| LEGACY EXISTS | Tell the developer: "This project still uses the old `.claude/alfred-code/` layout. Run `npx workticket init` — it migrates the directory with `git mv` so file history follows, and preserves your plans, history and lessons." Stop. |
+| CONFIG MISSING | Tell the developer: "Run `npx workticket init` first — it creates the config from what this repo actually contains." Stop. |
 
 Do not create the directory or the config yourself. If the installer is unavailable for some
 reason, the templates in `~/.claude/skills/workticket/templates/` can be copied by hand, but

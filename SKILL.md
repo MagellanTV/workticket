@@ -76,12 +76,6 @@ The skill separates **engine** (global, shared across projects) from **project d
 **On first run in a project**: if `.claude/workticket/config.md` does not exist, stop and tell the
 developer to run `npx workticket init`. Do not bootstrap the directory yourself.
 
-**Migrating from `alfred-code`**: this skill was previously named `alfred-code`. `npx workticket
-init` detects a legacy `.claude/alfred-code/` directory and renames it in place — `git mv` when
-tracked so file history follows — then rewrites stale paths inside the migrated files and in
-`.gitignore`. Config, plans, history and lessons all carry over, and a config that already exists
-is never overwritten. If both directories exist it refuses to merge them and asks which to keep.
-
 Load files lazily — read phase/agent files only when you reach that step.
 
 ---
@@ -260,6 +254,5 @@ All agent prompts include: ticket ID, ticket summary, config-driven project cont
 - Use `workticket setup` to verify the setup from inside Claude Code, and
   `workticket setup reconfigure` to walk the config field by field
 - Project data (plans, history, lessons) lives in `.claude/workticket/` per repo
-- Projects still on `.claude/alfred-code/` are migrated by `npx workticket init`
 - The workflow engine (this skill) is global and project-agnostic
 - If a code review skill is configured, it handles all review (not generic /code-review)

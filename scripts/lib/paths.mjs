@@ -28,9 +28,8 @@ export const envFilePath = (provider) => join(claudeDir(), `.${provider}-env`);
 export const packageRoot = () =>
   resolve(fileURLToPath(new URL('../..', import.meta.url)));
 
-/** Per-project data directory, and the legacy name it may still carry. */
+/** Per-project data directory. */
 export const projectDataDir = (cwd) => join(cwd, '.claude', 'workticket');
-export const legacyProjectDataDir = (cwd) => join(cwd, '.claude', 'alfred-code');
 
 /**
  * Render an absolute path back as ~/... for display. Keeps output readable

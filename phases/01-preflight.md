@@ -6,29 +6,19 @@ Read `.claude/workticket/config.md` first — all checks reference config values
 
 ### 1. Project data directory
 
-Check both the current and the legacy directory in one call — the skill was previously named
-`alfred-code`, so projects set up under the old name still hold their config, plans, history,
-and lessons in `.claude/alfred-code/`:
-
 ```bash
-echo "=== CURRENT ===" && test -d .claude/workticket && echo "EXISTS" || echo "NONE" && echo "=== LEGACY ===" && test -d .claude/alfred-code && echo "EXISTS" || echo "NONE"
+test -f .claude/workticket/config.md && echo "EXISTS" || echo "MISSING"
 ```
 
-| CURRENT | LEGACY | Action |
-|---|---|---|
-| EXISTS | NONE | Continue to step 2 |
-| EXISTS | EXISTS | Stop. Tell the developer to run `npx workticket init`, which shows both directories and asks which to keep. |
-| NONE | EXISTS | Stop. Tell the developer: "This project uses the old `.claude/alfred-code/` layout. Run `npx workticket init` — it migrates with `git mv` so file history follows, and preserves your config, plans, history and lessons." |
-| NONE | NONE | Stop. Tell the developer: "This project isn't set up yet. Run `npx workticket init`." |
+If MISSING, stop and tell the developer: "This project isn't set up yet. Run
+`npx workticket init` — it creates the config from what this repo actually contains."
 
 Do not create, copy, or move any of these files yourself. The installer does it in one portable
-pass with a backup and a `--dry-run`; doing it from here costs a permission prompt per write, and
-the shell one-liners that used to live in this file relied on BSD `sed -i ''` and broke on Linux.
+pass with a backup and a `--dry-run`; doing it from here costs a permission prompt per write.
 
 If the developer says the installer is not available, you may fall back to copying the templates
 from `~/.claude/skills/workticket/templates/` by hand — but say plainly that you are doing a
-partial setup, and never attempt the legacy migration this way: a half-moved data directory is
-worse than an unmigrated one.
+partial setup.
 
 ### 2. Working tree + branch + fetch
 
