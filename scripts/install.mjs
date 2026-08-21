@@ -8,7 +8,7 @@ import { cpSync, existsSync, mkdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import {
   heading, info, step, good, warn, fail, skipped, planned, dim, bold,
-  confirm, choose, ask, askSecret, closePrompts,
+  confirm, confirmWrite, choose, ask, askSecret, closePrompts,
 } from './lib/ui.mjs';
 import { packageRoot, skillInstallDir, globalClaudeMd, settingsPath, claudeDir, tildify } from './lib/paths.mjs';
 import { applySettings, renderPlan, GLOBAL_PERMISSIONS, GLOBAL_DIRECTORIES } from './lib/settings.mjs';
@@ -94,9 +94,11 @@ export async function run({ flags = {} } = {}) {
     info(dim('Bash/Edit/Write rules are scoped per project by `workticket init`.'));
     console.log('');
 
-    const go = dryRun || assumeYes || (await confirm('Add these entries?', true));
-    if (!go) {
-      warn('Skipped. The skill will prompt for permission when it reads its own config.');
+    const consent = dryRun ? { ok: true, reason: 'dry run' } : await confirmWrite('Add these entries?', { assumeYes });
+    if (!consent.ok) {
+      warn(`Not applied -- ${consent.reason}.`);
+      info(dim('The skill will prompt for permission each time it reads its own config.'));
+      if (!process.stdin.isTTY) info(dim('Re-run with --yes to apply this without a prompt.'));
       summary.push(['Global permissions', 'declined']);
     } else if (dryRun) {
       planned(`add ${plan.missingPermissions.length + plan.missingDirectories.length} entries to ${tildify(settingsPath())}`);

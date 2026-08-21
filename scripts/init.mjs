@@ -8,7 +8,7 @@ import { existsSync, mkdirSync, cpSync, readFileSync, writeFileSync } from 'node
 import { join } from 'node:path';
 import {
   heading, info, step, good, warn, fail, skipped, planned, dim, bold,
-  confirm, ask, choose, closePrompts, table, OK, WARN,
+  confirm, confirmWrite, ask, choose, closePrompts, table, OK, WARN,
 } from './lib/ui.mjs';
 import {
   packageRoot, skillInstallDir, findRepoRoot, projectDataDir, tildify,
@@ -232,9 +232,11 @@ export async function run({ flags = {} } = {}) {
     info(dim('gitignore it if your team does not already.'));
     console.log('');
 
-    const go = dryRun || assumeYes || (await confirm('Add these entries?', true));
-    if (!go) {
-      warn('Skipped. Claude Code will keep prompting for each command and file write.');
+    const consent = dryRun ? { ok: true, reason: 'dry run' } : await confirmWrite('Add these entries?', { assumeYes });
+    if (!consent.ok) {
+      warn(`Not applied -- ${consent.reason}.`);
+      info(dim('Claude Code will keep prompting for each command and file write.'));
+      if (!process.stdin.isTTY) info(dim('Re-run with --yes to apply this without a prompt.'));
       summary.push(['Project permissions', 'declined']);
     } else if (dryRun) {
       planned(`add ${plan.missingPermissions.length} entries to ${tildify(settingsFile)}`);

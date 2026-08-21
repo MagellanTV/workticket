@@ -32,7 +32,10 @@ Usage
 
 Options
   --dry-run       Show every change without making it. Works with install and init.
-  --yes, -y       Skip confirmation prompts. Intended for CI; still respects --dry-run.
+  --yes, -y       Consent to the changes without prompting. Required to write
+                  settings files when there is no terminal to ask -- without it a
+                  non-interactive run reports what it would do and changes nothing.
+                  Still respects --dry-run.
   --provider=X    Ticket provider for install: jira | github-issues | none
   --no-verify     Skip the live credential check in install and doctor.
   --quiet, -q     Only print warnings and errors.

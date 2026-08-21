@@ -15,7 +15,7 @@ import {
 } from '../lib/settings.mjs';
 import { parseConfig, parseBlock, setValue, applyEdits, editsFromDetection, extractBlocks } from '../lib/config.mjs';
 import { parseEnvFile, renderEnvFile, PROVIDERS, inspectCredentials } from '../lib/keys.mjs';
-import { InputClosedError, ask, confirm, choose, askSecret } from '../lib/ui.mjs';
+import { InputClosedError, ask, confirm, choose, askSecret, confirmWrite } from '../lib/ui.mjs';
 import * as graphify from '../lib/graphify.mjs';
 
 let passed = 0;
@@ -729,6 +729,38 @@ await check('no test can open an interactive prompt', () => {
     if (m.index < helperAt) offenders.push(m[1]);
   }
   eq(offenders, [], 'no prompt is called before the helper that guards it');
+});
+
+await check('confirmWrite declines when nobody can answer and --yes was not passed', async () => {
+  // The bug this replaces: confirm(q, true) returned its `true` fallback with no
+  // TTY, so a non-interactive run applied 25 permission entries having asked
+  // nothing. A prompt nobody can answer is not consent.
+  const res = await confirmWrite('Add these entries?', { assumeYes: false, interactive: false });
+  eq(res.ok, false, 'declines');
+  ok(/--yes/.test(res.reason), `reason names the flag to pass: ${res.reason}`);
+});
+
+await check('confirmWrite proceeds only on an explicit --yes when non-interactive', async () => {
+  const res = await confirmWrite('Add these entries?', { assumeYes: true, interactive: false });
+  eq(res.ok, true, 'proceeds');
+  ok(/--yes/.test(res.reason), 'reason records why');
+});
+
+await check('confirmWrite treats --yes as consent even with a terminal present', async () => {
+  const res = await confirmWrite('Add these entries?', { assumeYes: true, interactive: true });
+  eq(res.ok, true, 'proceeds without prompting');
+});
+
+await check('no command asks a write question with a yes-by-default fallback', () => {
+  // confirm(q, true) is the shape that caused the bug. Any consequential
+  // question must go through confirmWrite instead.
+  const offenders = [];
+  for (const file of ['install.mjs', 'init.mjs', 'doctor.mjs']) {
+    const src = readFileSync(new URL(`../${file}`, import.meta.url), 'utf8');
+    const re = /confirm\([^)]*,\s*true\s*\)/g;
+    if (re.test(src)) offenders.push(file);
+  }
+  eq(offenders, [], 'commands use confirmWrite for anything that writes');
 });
 
 console.log('\nTicket providers');

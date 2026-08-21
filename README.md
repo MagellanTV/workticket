@@ -46,9 +46,11 @@ migrates a legacy `.claude/alfred-code/` directory if it finds one, and scopes t
 permissions to that repo.
 
 Both commands are idempotent — re-running them reports "already present" and writes nothing. Add
-`--dry-run` to see every change without making it, or `--yes` for non-interactive use. Run with
-stdin closed or redirected and they fall back to defaults rather than hanging; back out of a
-prompt with Ctrl+D and nothing is written.
+`--dry-run` to see every change without making it.
+
+For automation, pass `--yes`. It is genuinely required: with no terminal to ask, the installer
+reports what it *would* change to a settings file and then changes nothing, because a prompt
+nobody can answer is not consent. Back out of a prompt with Ctrl+D and nothing is written either.
 
 `install` also checks for [graphify](https://pypi.org/project/graphifyy/), the optional
 knowledge-graph backend the analyze phase prefers over grep. If it is missing, it offers to

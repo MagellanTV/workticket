@@ -108,6 +108,25 @@ export async function confirm(q, fallback = true) {
   }
 }
 
+/**
+ * Consent for a change that writes something.
+ *
+ * `confirm` returns its fallback when there is no TTY, which is fine for a
+ * question whose default is "no" but silently turns "ask before writing" into
+ * "write" when the default is "yes". A prompt nobody can answer is not consent.
+ *
+ * So the rule here is explicit and has no third case: either a human answers
+ * yes, or --yes was passed. Anything else declines, and says why so the caller
+ * can tell the user what to pass.
+ *
+ * Returns { ok, reason }.
+ */
+export async function confirmWrite(q, { assumeYes = false, interactive = Boolean(stdin.isTTY) } = {}) {
+  if (assumeYes) return { ok: true, reason: 'assumed by --yes' };
+  if (!interactive) return { ok: false, reason: 'not a terminal, and --yes was not passed' };
+  return { ok: await confirm(q, true), reason: 'declined at the prompt' };
+}
+
 /** Pick one of a list. Returns the chosen value, or fallback non-interactively. */
 export async function choose(q, options, fallback = null) {
   if (!stdin.isTTY || options.length === 0) return fallback;
