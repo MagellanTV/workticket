@@ -1,0 +1,10 @@
+# Credentials. A project-level .npmrc holds a publish token; this repo is
+# public, so it must never be committed.
+.npmrc
+
+# Build artefacts
+node_modules/
+*.tgz
+
+# macOS
+.DS_Store
