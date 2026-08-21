@@ -107,6 +107,12 @@ Show the list and let the developer pick.
 ### 3.2 Branch naming
 Show: pattern, type_mapping, username_format.
 
+The default is `{type}/{ticket}-{description}` — `feature/VRT-6070-create-my-list-screen`.
+Ticket and description are joined by a hyphen, not a slash, and the description is always in
+English. If the developer changes the pattern, confirm which tokens their new one uses, since
+`username_format` only matters when `{username}` is among them. `release/` branches are versioned
+rather than ticket-based and sit outside the pattern.
+
 ### 3.3 Ticket system
 Show: provider, base_url, auth_method, env_vars.
 Ask which provider (jira / github-issues). Jira is the default; an empty value means

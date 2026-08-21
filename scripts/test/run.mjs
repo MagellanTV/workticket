@@ -794,6 +794,84 @@ await check('inspect reports a boolean even when the CLI is absent', async () =>
   ok(state.installed === false || state.version === null || typeof state.version === 'string', 'version shape');
 });
 
+console.log('\nBranch naming');
+
+/** Fill a pattern the way Phase 04 is instructed to. Test-local on purpose:
+ *  the real substitution happens at runtime, and this pins what the shipped
+ *  default is supposed to produce. */
+const renderBranch = (pattern, { type, ticket, description, username = '' }) =>
+  pattern
+    .replace('{type}', type)
+    .replace('{ticket}', ticket)
+    .replace('{description}', description)
+    .replace('{username}', username);
+
+await check('the shipped pattern is type/ticket-description', () => {
+  const b = parseConfig(TEMPLATE).branch_naming;
+  eq(b.pattern, '{type}/{ticket}-{description}', 'pattern');
+  ok(!b.pattern.includes('{username}'), 'the org convention has no username segment');
+});
+
+await check('the pattern reproduces the documented examples exactly', () => {
+  const { pattern } = parseConfig(TEMPLATE).branch_naming;
+  eq(
+    renderBranch(pattern, { type: 'feature', ticket: 'VRT-6070', description: 'create-my-list-screen' }),
+    'feature/VRT-6070-create-my-list-screen',
+    'feature example',
+  );
+  eq(
+    renderBranch(pattern, { type: 'fix', ticket: 'VRT-6780', description: 'error-parameter-custom-data-event' }),
+    'fix/VRT-6780-error-parameter-custom-data-event',
+    'fix example',
+  );
+  eq(
+    renderBranch(pattern, { type: 'hotfix', ticket: 'VRT-6781', description: 'critical-login-bug' }),
+    'hotfix/VRT-6781-critical-login-bug',
+    'hotfix example',
+  );
+});
+
+await check('ticket and description are joined by a hyphen, not a slash', () => {
+  // feature/VRT-6070/create-my-list-screen is the wrong shape and was what the
+  // previous default produced.
+  const out = renderBranch(parseConfig(TEMPLATE).branch_naming.pattern, {
+    type: 'feature', ticket: 'VRT-1', description: 'a-b',
+  });
+  eq(out.split('/').length, 2, 'exactly one slash, after the type');
+  ok(out.includes('VRT-1-a-b'), 'ticket and description in one segment');
+});
+
+await check('type mapping collapses onto the four real prefixes', () => {
+  const m = parseConfig(TEMPLATE).branch_naming.type_mapping;
+  eq(m.bug, 'fix', 'bugs get fix/');
+  for (const t of ['story', 'task', 'enhancement']) {
+    eq(m[t], 'feature', `${t} shares feature/`);
+  }
+  eq(m.default, 'feature', 'unknown types default to feature');
+  const prefixes = new Set(Object.values(m));
+  for (const p of prefixes) {
+    ok(['feature', 'fix', 'hotfix', 'release'].includes(p), `${p} is a real prefix`);
+  }
+});
+
+await check('no mapping still points at the old bugfix prefix', () => {
+  const m = parseConfig(TEMPLATE).branch_naming.type_mapping;
+  ok(!Object.values(m).includes('bugfix'), 'bugfix/ is not part of the convention');
+  ok(!Object.values(m).includes('task'), 'task/ is not a prefix; tasks use feature/');
+});
+
+await check('Phase 04 states the rules a pattern alone cannot express', () => {
+  // Collapse whitespace first: these are prose assertions and the source is
+  // hard-wrapped, so a sentence spanning two lines is not a missing rule.
+  const src = readFileSync(new URL('../../phases/04-create-branch.md', import.meta.url), 'utf8')
+    .replace(/\s+/g, ' ');
+  ok(/hyphen, not a slash/.test(src), 'separator is called out');
+  ok(/English only/i.test(src), 'description language is specified');
+  ok(/release\/\{version\}|release\/5\.4/.test(src), 'release branches are handled as a special case');
+  ok(/hotfix/.test(src), 'hotfix prefix is documented');
+  ok(/never from the ticket type alone/.test(src), 'hotfix is not inferred from ticket type');
+});
+
 console.log('\nPR template');
 
 await check('a github blob URL is rewritten to the raw host', () => {

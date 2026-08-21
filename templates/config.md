@@ -17,17 +17,27 @@ base_branch: "main"             # branch PRs target (main, develop, master)
 
 ## Branch naming
 
+Default follows `type/ticket-short-description`, e.g. `feature/VRT-6070-create-my-list-screen`.
+Note the separator between ticket and description is a hyphen, not a slash — the whole thing
+after `type/` is one segment.
+
 ```yaml
-pattern: "{type}/{username}/{ticket}/{description}"
-# Available tokens: {type}, {username}, {ticket}, {description}
+pattern: "{type}/{ticket}-{description}"
+# Available tokens: {type}, {ticket}, {description}, {username}
+# {username} is available but unused by the default pattern.
 type_mapping:
-  bug: "bugfix"
-  story: "feature"
-  task: "task"
+  bug: "fix"                    # bug fixes
+  story: "feature"              # features, stories, tasks and enhancements all
+  task: "feature"               # share the feature/ prefix
   enhancement: "feature"
-  default: "task"
-username_format: "kebab-case"   # camelCase | kebab-case | as-is
+  hotfix: "hotfix"              # critical production fixes
+  default: "feature"
+username_format: "kebab-case"   # camelCase | kebab-case | as-is — only used if
+                                # {username} appears in the pattern
 ```
+
+`release/` branches are named for the version, not a ticket (`release/5.4`), so they fall
+outside this pattern. See `phases/04-create-branch.md`.
 
 ## Ticket system
 

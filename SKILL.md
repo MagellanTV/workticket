@@ -87,7 +87,7 @@ All project-specific values come from `.claude/workticket/config.md`. Read it at
 | Config field | Used in | Example |
 |---|---|---|
 | `project.base_branch` | Phase 04 (branch from), Phase 08 (diff base) | `main` |
-| `branch_naming.pattern` | Phase 04 | `{type}/{username}/{ticket}/{description}` |
+| `branch_naming.pattern` | Phase 04 | `{type}/{ticket}-{description}` |
 | `ticket_system.provider` | Phase 02 (which adapter to use) | `jira` |
 | `code_review.skill_name` | Phase 03, 08 (which skill for review) | `my-review-skill` |
 | `linter.command` | Phase 08 Track A | `npm run lint` |
